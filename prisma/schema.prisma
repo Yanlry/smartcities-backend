@@ -14,10 +14,73 @@ datasource db {
 }
 
 model User {
-  id            Int      @id @default(autoincrement())
-  email         String   @unique
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
   password      String
   name          String?
-  createdAt     DateTime @default(now())
-  refreshToken  String?  // Optionnel : Pour stocker le token de rafraîchissement
+  createdAt     DateTime  @default(now())
+  refreshToken  String?  
+  resetToken    String?  
+  resetTokenExpiry DateTime? 
+  trustRate     Float?    // Taux de confiance
+  reports       Report[]
+  votes         Vote[] // Ajoute cette ligne pour la relation inverse avec Vote
+  comments      Comment[] // Relation inverse avec Comment
+  posts    Post[]  // Relation avec le modèle Post
+  likes         Like[] 
+}
+
+model Report {
+  id           Int       @id @default(autoincrement())
+  title        String
+  description  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  userId       Int
+  user         User      @relation(fields: [userId], references: [id])
+
+  // Relation avec les votes
+  votes        Vote[]
+  // Relation avec les commentaires
+  comments     Comment[] // Relation inverse avec Comment
+}
+
+model Vote {
+  id           Int       @id @default(autoincrement())
+  type         String
+  reportId     Int
+  userId       Int
+  report       Report    @relation(fields: [reportId], references: [id])
+  user         User      @relation(fields: [userId], references: [id])
+  createdAt    DateTime  @default(now()) // Ajoute cette ligne
+}
+
+model Like {
+  id        Int      @id @default(autoincrement())
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id])
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Comment {
+  id           Int       @id @default(autoincrement())
+  text         String
+  createdAt    DateTime  @default(now())
+  reportId     Int
+  userId       Int
+  report       Report    @relation(fields: [reportId], references: [id])
+  user         User      @relation(fields: [userId], references: [id])
+}
+
+model Post {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  authorId  Int
+  author    User     @relation(fields: [authorId], references: [id])
+  likes         Like[] 
 }
