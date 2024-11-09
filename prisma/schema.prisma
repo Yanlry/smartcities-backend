@@ -24,11 +24,24 @@ model User {
   resetTokenExpiry DateTime? 
   trustRate     Float?    // Taux de confiance
   reports       Report[]
-  votes         Vote[] // Ajoute cette ligne pour la relation inverse avec Vote
-  comments      Comment[] // Relation inverse avec Comment
-  posts    Post[]  // Relation avec le modèle Post
+  votes         Vote[] // Relation avec Vote
+  comments      Comment[] // Relation avec Comment
+  posts         Post[]  // Relation avec Post
   likes         Like[] 
+  groups        Group[]  @relation("GroupMembers")       // Groupes auxquels appartient l'utilisateur
+  ownedGroups   Group[]  @relation("GroupOwnership")     // Groupes possédés par l'utilisateur
 }
+
+model Group {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  members     User[]   @relation("GroupMembers")    // Membres du groupe
+  ownerId     Int
+  owner       User     @relation("GroupOwnership", fields: [ownerId], references: [id]) // Propriétaire du groupe
+}
+
 
 model Report {
   id           Int       @id @default(autoincrement())
@@ -84,3 +97,4 @@ model Post {
   author    User     @relation(fields: [authorId], references: [id])
   likes         Like[] 
 }
+
