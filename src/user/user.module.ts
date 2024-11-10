@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
-import { UserController } from './user.controller';
 import { UserService } from './user.service';
-import { PrismaService } from '../prisma/prisma.service'; // Importer PrismaService pour l'accès à la DB
+import { UserController } from './user.controller';
+import { PrismaModule } from '../prisma/prisma.module';
+import { NotificationModule } from '../notification/notification.module'; // Import du module de notifications
 
 @Module({
+  imports: [PrismaModule, NotificationModule], // Ajoute NotificationModule ici
+  providers: [UserService],
   controllers: [UserController],
-  providers: [UserService, PrismaService], // Fournit PrismaService et UserService
 })
 export class UserModule {}

@@ -18,6 +18,11 @@ model User {
   email         String    @unique
   password      String
   name          String?
+  
+  // Relations de suivi et de followers via une table de jointure explicite
+  following     UserFollow[] @relation("FollowingRelation")
+  followers     UserFollow[] @relation("FollowerRelation")
+
   createdAt     DateTime  @default(now())
   refreshToken  String?  
   resetToken    String?  
@@ -27,10 +32,35 @@ model User {
   votes         Vote[] // Relation avec Vote
   comments      Comment[] // Relation avec Comment
   posts         Post[]  // Relation avec Post
+  notifications Notification[] // Relation avec Notification
   likes         Like[] 
   groups        Group[]  @relation("GroupMembers")       // Groupes auxquels appartient l'utilisateur
   ownedGroups   Group[]  @relation("GroupOwnership")     // Groupes possédés par l'utilisateur
+  organizedEvents Event[] @relation("UserEvents") // Événements organisés par l'utilisateur
+  invites         Invite[] // Invitations reçues par l'utilisateur
+  attendedEvents  Attendee[] // Événements auxquels l'utilisateur participe
+  conversations   Conversation[]  @relation("UserConversations") // Liens avec les conversations
+  messages        Message[]       @relation("UserMessages") // Liens avec les messages envoyés
+  isSubscribed      Boolean  @default(false) // Nouveau champ pour indiquer l'abonnement
+  isMunicipality Boolean  @default(false)
+  notificationSubscriptions NotificationSubscription[] // Relation vers les abonnements de notification
 }
+
+model UserFollow {
+  id           Int    @id @default(autoincrement())
+  followerId   Int
+  followingId  Int
+
+  follower     User   @relation("FollowingRelation", fields: [followerId], references: [id])
+  following    User   @relation("FollowerRelation", fields: [followingId], references: [id])
+
+  createdAt    DateTime @default(now())
+
+  @@unique([followerId, followingId]) // Clé unique pour éviter les doublons
+}
+
+
+
 
 model Group {
   id          Int      @id @default(autoincrement())
@@ -51,11 +81,10 @@ model Report {
   updatedAt    DateTime  @updatedAt
   userId       Int
   user         User      @relation(fields: [userId], references: [id])
-
-  // Relation avec les votes
   votes        Vote[]
-  // Relation avec les commentaires
   comments     Comment[] // Relation inverse avec Comment
+  latitude     Float     @default(0.0) 
+  longitude    Float     @default(0.0)
 }
 
 model Vote {
@@ -96,5 +125,86 @@ model Post {
   authorId  Int
   author    User     @relation(fields: [authorId], references: [id])
   likes         Like[] 
+  latitude     Float?    // Latitude pour la localisation sur la carte
+  longitude    Float?    // Longitude pour la localisation sur la carte
 }
+
+model Event {
+  id           Int        @id @default(autoincrement())
+  title        String
+  description  String?
+  date         DateTime
+  location     String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  attendees    Attendee[] // Participants à l'événement
+  organizer    User       @relation("UserEvents", fields: [organizerId], references: [id])
+  organizerId  Int
+  invites      Invite[]   // Invitations envoyées pour cet événement
+  latitude     Float     @default(0.0) 
+  longitude    Float     @default(0.0)
+}
+
+model Attendee {
+  id       Int      @id @default(autoincrement())
+  user     User     @relation(fields: [userId], references: [id])
+  event    Event    @relation(fields: [eventId], references: [id])
+  userId   Int
+  eventId  Int
+  status   String   // Peut indiquer "accepted", "declined", ou "pending"
+}
+
+model Invite {
+  id        Int    @id @default(autoincrement())
+  eventId   Int
+  event     Event  @relation(fields: [eventId], references: [id])
+  userId    Int
+  user      User   @relation(fields: [userId], references: [id])
+  status    String // "pending", "accepted", "declined"
+  sentAt    DateTime @default(now())
+  @@unique([eventId, userId]) // Clé unique composée
+}
+
+model Conversation {
+  id             Int       @id @default(autoincrement())
+  participants   User[]    @relation("UserConversations") // Liste des participants dans la conversation
+  messages       Message[] // Liste des messages dans la conversation
+  isMunicipality  Boolean   @default(false) // Champ pour identifier la conversation avec la mairie
+  createdAt    DateTime @default(now())
+}
+
+model Message {
+  id             Int       @id @default(autoincrement())
+  content        String
+  createdAt      DateTime  @default(now())
+  isRead         Boolean   @default(false) // Ajout du champ pour l'état de lecture
+  senderId       Int
+  sender         User      @relation("UserMessages", fields: [senderId], references: [id]) // Expéditeur du message
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id]) // Conversation à laquelle le message appartient
+}
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  message     String    // Contenu de la notification
+  isRead      Boolean   @default(false) // Statut de lecture (non lu par défaut)
+  createdAt   DateTime  @default(now()) // Date de création de la notification
+  userId      Int       // Référence à l'utilisateur
+  user        User      @relation(fields: [userId], references: [id])
+}
+
+model NotificationSubscription {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  city       String?  // Nom de la ville ou autre identifiant géographique
+  latitude   Float?   // Latitude du périmètre d'abonnement
+  longitude  Float?   // Longitude du périmètre d'abonnement
+  radius     Float?   // Rayon du périmètre en km
+
+  user       User     @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+
+
 

@@ -1,11 +1,29 @@
-import { Controller, Get, Put, Delete, Param, Body, Query, BadRequestException, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Param, Body, Query, BadRequestException, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // Pour sécuriser l'accès avec un token JWT
 
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) { }
+
+  // Récupère un utilisateur avec le nombre de followers
+  @Get(':id')
+  async getUserWithFollowers(@Param('id') userId: string) {
+    return this.userService.getUserWithFollowers(Number(userId));
+  }
+
+  // Suivre un utilisateur
+  @Post(':id/follow')
+  followUser(@Param('id') userId: string, @Body('followerId') followerId: number) {
+    return this.userService.followUser(+userId, followerId);
+  }
+
+  // Se désabonner d'un utilisateur
+  @Delete(':id/unfollow')
+  unfollowUser(@Param('id') userId: string, @Body('followerId') followerId: number) {
+    return this.userService.unfollowUser(+userId, followerId);
+  }
 
   // RÉCUPÈRE LE PROFIL D'UN UTILISATEUR PAR SON ID
   @Get(':id')
@@ -45,4 +63,5 @@ export class UserController {
     if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
     return this.userService.deleteUser(userId);
   }
+
 }

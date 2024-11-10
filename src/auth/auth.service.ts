@@ -18,9 +18,9 @@ export class AuthService {
   async signup(email: string, password: string, name: string) {
     const existingUser = await this.prisma.user.findUnique({ where: { email } });
     if (existingUser) throw new ConflictException('Cet email est déjà utilisé.');
-  
+
     const hashedPassword = await hash(password, 10);
-  
+
     return this.prisma.user.create({
       data: {
         email,
@@ -30,7 +30,7 @@ export class AuthService {
       },
     });
   }
-  
+
   // AUTHENTIFIE L'UTILISATEUR ET RETOURNE UN ACCESS TOKEN ET UN REFRESH TOKEN SI LES IDENTIFIANTS SONT VALIDES
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
@@ -70,7 +70,7 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
-    
+
     const resetToken = uuidv4(); // CRÉE UN TOKEN UNIQUE DE RÉINITIALISATION
     const resetTokenExpiry = new Date(Date.now() + 3600000); // EXPIRE DANS 1 HEURE
 
@@ -92,7 +92,7 @@ export class AuthService {
     } catch (error) {
       console.error('Erreur d\'envoi d\'email:', error.response ? error.response.body : error);
       throw new InternalServerErrorException('Erreur lors de l\'envoi de l\'email');
-    }      
+    }
   }
 
   // UTILISE LE TOKEN POUR RÉINITIALISER LE MOT DE PASSE DE L'UTILISATEUR, SI LE TOKEN EST VALIDE ET NON EXPRIRÉ

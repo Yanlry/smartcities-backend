@@ -1,9 +1,54 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) { }
+
+  async getUserWithFollowers(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        _count: {
+          select: { followers: true }, // Compte les followers
+        },
+      },
+    });
+
+    if (!user) throw new NotFoundException('Utilisateur non trouvé');
+
+    return {
+      ...user,
+      followersCount: user._count.followers, // Ajoute le nombre de followers au résultat
+    };
+  }
+
+  async followUser(userId: number, followerId: number) {
+    const follow = await this.prisma.userFollow.create({
+      data: {
+        followingId: userId,
+        followerId: followerId,
+      },
+    });
+    // Créer une notification pour informer l'utilisateur qu'il a un nouveau follower
+    const follower = await this.prisma.user.findUnique({ where: { id: followerId } });
+    await this.notificationService.createNotification(userId, `${follower.name} vous suit maintenant.`);
+    return follow;
+  }
+
+
+  // Se désabonner d'un utilisateur
+  async unfollowUser(userId: number, followerId: number) {
+    return this.prisma.userFollow.deleteMany({
+      where: {
+        followingId: userId,
+        followerId: followerId,
+      },
+    });
+  }
 
   // RÉCUPÈRE LE PROFIL COMPLET D'UN UTILISATEUR PAR SON ID
   async getUserById(userId: number) {
@@ -40,7 +85,7 @@ export class UserService {
         email: true,
         name: true,
         createdAt: true,
-        reports: true, 
+        reports: true,
       },
     });
     return users;
@@ -62,8 +107,8 @@ export class UserService {
     };
   }
 
-   // SUPPRIME UN UTILISATEUR PAR SON ID
-   async deleteUser(userId: number) {
+  // SUPPRIME UN UTILISATEUR PAR SON ID
+  async deleteUser(userId: number) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Utilisateur non trouvé');
 

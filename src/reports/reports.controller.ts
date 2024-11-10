@@ -3,7 +3,7 @@ import { ReportService } from './reports.service';
 
 @Controller('reports')
 export class ReportController {
-  constructor(private readonly reportService: ReportService) {}
+  constructor(private readonly reportService: ReportService) { }
 
   // CRÉE UN NOUVEAU SIGNAL
   @Post()
@@ -47,10 +47,10 @@ export class ReportController {
     return this.reportService.commentOnReport(commentData);
   }
 
-   // ROUTE POUR RÉCUPÉRER LES COMMENTAIRES D'UN SIGNAL
-   @Get(':id/comments')
-   async getCommentsByReportId(@Param('id') id: string) {
-     const reportId = parseInt(id, 10);
-     return this.reportService.getCommentsByReportId(reportId);
-   }
+  // ROUTE POUR RÉCUPÉRER LES COMMENTAIRES D'UN SIGNAL
+  @Get(':id/comments')
+  async getCommentsByReportId(@Param('id') id: string) {
+    const reportId = parseInt(id, 10);
+    return this.reportService.getCommentsByReportId(reportId);
+  }
 }

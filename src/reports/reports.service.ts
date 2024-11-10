@@ -1,22 +1,58 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class ReportService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) { }
 
   // CRÉE UN NOUVEAU SIGNAL
   async createReport(reportData: any) {
     if (!reportData.title || !reportData.description || !reportData.userId) {
       throw new Error("Title, description, and userId are required");
     }
-    return this.prisma.report.create({
+
+    const report = await this.prisma.report.create({
       data: {
         title: reportData.title,
         description: reportData.description,
         userId: reportData.userId,
+        latitude: reportData.latitude,
+        longitude: reportData.longitude,
       },
     });
+
+    // Trouver les abonnés proches
+    const nearbySubscribers = await this.prisma.notificationSubscription.findMany({
+      where: {
+        OR: [
+          { city: reportData.city },
+          {
+            latitude: {
+              gte: reportData.latitude - 0.1, // Ajuste selon la distance
+              lte: reportData.latitude + 0.1,
+            },
+            longitude: {
+              gte: reportData.longitude - 0.1,
+              lte: reportData.longitude + 0.1,
+            },
+          },
+        ],
+      },
+      select: { userId: true },
+    });
+
+    // Envoyer une notification à chaque abonné
+    for (const subscriber of nearbySubscribers) {
+      await this.notificationService.createNotification(
+        subscriber.userId,
+        `Nouveau signalement dans votre zone : ${reportData.title}`
+      );
+    }
+
+    return report;
   }
 
   // LISTE LES SIGNALS AVEC FILTRES OPTIONNELS, ET COMPTE LES VOTES
@@ -100,12 +136,12 @@ export class ReportService {
   // AJOUTE UN COMMENTAIRE À UN SIGNAL
   async commentOnReport(commentData: { reportId: number, userId: number, text: string }) {
     const { reportId, userId, text } = commentData;
-    
+
     // Vérifier que tous les champs sont fournis
     if (!reportId || !userId || !text) {
       throw new Error("Report ID, User ID, and Comment text are required");
     }
-    
+
     // Créer le commentaire dans la base de données
     return this.prisma.comment.create({
       data: {
@@ -116,8 +152,8 @@ export class ReportService {
     });
   }
 
-   // MÉTHODE POUR RÉCUPÉRER LES COMMENTAIRES D'UN SIGNAL
-   async getCommentsByReportId(reportId: number) {
+  // MÉTHODE POUR RÉCUPÉRER LES COMMENTAIRES D'UN SIGNAL
+  async getCommentsByReportId(reportId: number) {
     return this.prisma.comment.findMany({
       where: { reportId },
     });

@@ -5,7 +5,7 @@ import { Request, Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   // CRÉE UN NOUVEL UTILISATEUR AVEC UN EMAIL, UN MOT DE PASSE ET UN NOM FOURNIS
   @Post('signup')
