@@ -18,11 +18,8 @@ model User {
   email         String    @unique
   password      String
   name          String?
-  
-  // Relations de suivi et de followers via une table de jointure explicite
   following     UserFollow[] @relation("FollowingRelation")
   followers     UserFollow[] @relation("FollowerRelation")
-
   createdAt     DateTime  @default(now())
   refreshToken  String?  
   resetToken    String?  
@@ -59,9 +56,6 @@ model UserFollow {
   @@unique([followerId, followingId]) // Clé unique pour éviter les doublons
 }
 
-
-
-
 model Group {
   id          Int      @id @default(autoincrement())
   name        String
@@ -71,7 +65,6 @@ model Group {
   ownerId     Int
   owner       User     @relation("GroupOwnership", fields: [ownerId], references: [id]) // Propriétaire du groupe
 }
-
 
 model Report {
   id           Int       @id @default(autoincrement())
@@ -85,7 +78,11 @@ model Report {
   comments     Comment[] // Relation inverse avec Comment
   latitude     Float     @default(0.0) 
   longitude    Float     @default(0.0)
+  type         String    // Nouveau champ pour le type de rapport (par exemple, "sécurité", "pollution", etc.)
+  eventId      Int?      // Relation avec Event (facultatif)
+  event        Event?    @relation("EventReports", fields: [eventId], references: [id])
 }
+
 
 model Vote {
   id           Int       @id @default(autoincrement())
@@ -94,6 +91,8 @@ model Vote {
   userId       Int
   report       Report    @relation(fields: [reportId], references: [id])
   user         User      @relation(fields: [userId], references: [id])
+  eventId      Int?      // Relation optionnelle avec Event
+  event        Event?    @relation("EventVotes", fields: [eventId], references: [id]) // Ajoutez cette relation
   createdAt    DateTime  @default(now()) // Ajoute cette ligne
 }
 
@@ -143,6 +142,8 @@ model Event {
   invites      Invite[]   // Invitations envoyées pour cet événement
   latitude     Float     @default(0.0) 
   longitude    Float     @default(0.0)
+  reports      Report[]   @relation("EventReports") // Relation ajoutée entre Event et Report
+  votes        Vote[]     @relation("EventVotes")   // Relation avec les votes
 }
 
 model Attendee {

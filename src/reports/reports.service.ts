@@ -10,8 +10,8 @@ export class ReportService {
 
   // CRÉE UN NOUVEAU SIGNAL
   async createReport(reportData: any) {
-    if (!reportData.title || !reportData.description || !reportData.userId) {
-      throw new Error("Title, description, and userId are required");
+    if (!reportData.title || !reportData.description || !reportData.userId || !reportData.type) {
+      throw new Error("Title, description, userId, and type are required");
     }
 
     const report = await this.prisma.report.create({
@@ -21,6 +21,7 @@ export class ReportService {
         userId: reportData.userId,
         latitude: reportData.latitude,
         longitude: reportData.longitude,
+        type: reportData.type, // Inclure le type du rapport
       },
     });
 
@@ -66,6 +67,7 @@ export class ReportService {
         createdAt: true,
         updatedAt: true,
         userId: true,
+        type: true, // Assurez-vous que `type` est sélectionné
         votes: {
           select: {
             type: true,
@@ -96,6 +98,7 @@ export class ReportService {
         createdAt: true,
         updatedAt: true,
         userId: true,
+        type: true, // Assurez-vous que le `type` est récupéré
         votes: {
           select: {
             type: true,
@@ -104,15 +107,15 @@ export class ReportService {
       },
     });
   }
-
+  
   // MET À JOUR UN SIGNAL
   async updateReport(id: number, updateData: any) {
     return this.prisma.report.update({
       where: { id },
-      data: updateData,
+      data: updateData,  // Le `updateData` pourrait inclure `type`
     });
   }
-
+  
   // SUPPRIME UN SIGNAL
   async deleteReport(id: number) {
     return this.prisma.report.delete({
