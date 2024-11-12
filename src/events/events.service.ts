@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
@@ -12,7 +12,11 @@ export class EventsService {
 
   // CRÉE UN NOUVEL ÉVÉNEMENT
   async create(data: CreateEventDto) {
-    return this.prisma.event.create({
+    if (data.reportId && !data.radius) {
+      throw new BadRequestException('Un rayon (radius) doit être défini si vous associez un événement à un signalement.');
+    }
+    // Créer l'événement
+    const event = await this.prisma.event.create({
       data: {
         title: data.title,
         description: data.description,
@@ -21,6 +25,17 @@ export class EventsService {
         organizer: { connect: { id: data.organizerId } },
       },
     });
+    // Si un signalement est lié à cet événement, associer l'événement au signalement
+    if (data.reportId && data.radius) {
+      await this.prisma.report.update({
+        where: { id: data.reportId },
+        data: {
+          eventId: event.id, // Lier l'événement au signalement
+          radius: data.radius, // Définir un rayon spécifique si nécessaire
+        },
+      });
+    }
+    return event;
   }
 
   // LISTE TOUS LES ÉVÉNEMENTS
@@ -45,21 +60,27 @@ export class EventsService {
 
   // INVITE UN UTILISATEUR À UN ÉVÉNEMENT
   async inviteUser(eventId: number, userId: number) {
+    // Créer une invitation pour un utilisateur
     const invite = await this.prisma.invite.create({
       data: {
         eventId: eventId,
         userId: userId,
-        status: "pending",
+        status: 'pending', // Statut d'invitation par défaut
       },
     });
 
-    // Notifie l'utilisateur qu'il a reçu une invitation
+    // Notifier l'utilisateur qu'il a été invité
     const message = `Vous avez été invité à un événement (ID : ${eventId})`;
-    await this.notificationService.createNotification(userId, message);
+    await this.notificationService.createNotification(
+      userId,          // ID de l'utilisateur qui reçoit la notification
+      message,         // Le message de notification
+      "event",         // Le type de notification (ici "event")
+      eventId          // L'ID de l'événement pour lequel la notification est envoyée
+    );
+    
 
     return invite;
   }
-
 
   // RÉPOND À UNE INVITATION (ACCEPTE OU REFUSE)
   async rsvpToEvent(eventId: number, userId: number, status: string) {
@@ -86,11 +107,16 @@ export class EventsService {
 
     // Envoie une notification à l'organisateur pour l'informer de la réponse
     const message = `L'utilisateur (ID : ${userId}) a ${status === "accepted" ? "accepté" : "refusé"} l'invitation pour l'événement (ID : ${eventId})`;
-    await this.notificationService.createNotification(event.organizerId, message);
+    await this.notificationService.createNotification(
+      event.organizerId,  // ID de l'organisateur de l'événement
+      message,            // Message indiquant si l'utilisateur a accepté ou refusé l'invitation
+      "event",            // Le type de notification ("event" pour un événement)
+      eventId             // L'ID de l'événement pour lequel la notification est envoyée
+    );
+    
 
     return { message: "Statut de l'invitation mis à jour avec succès" };
   }
-
 
   // SUPPRIME UN ÉVÉNEMENT
   async remove(eventId: number, userId: number) {
@@ -131,14 +157,26 @@ export class EventsService {
 
     // Notifie chaque invité et participant que l'événement a été annulé
     const message = `L'événement (ID : ${eventId}) a été annulé.`;
-    for (const attendee of attendees) {
-      await this.notificationService.createNotification(attendee.userId, message);
-    }
-    for (const invite of invites) {
-      await this.notificationService.createNotification(invite.userId, message);
-    }
+    // Correction pour inviter et notifier
+      for (const invite of invites) {
+        await this.notificationService.createNotification(
+          invite.userId,  // userId de l'invité
+          message,  // message de notification
+          'event',  // type de notification
+          event.id  // relatedId (ID de l'événement)
+        );
+      }
+
+      // Correction pour les participants
+      for (const attendee of attendees) {
+        await this.notificationService.createNotification(
+          attendee.userId,  // userId du participant
+          message,  // message de notification
+          'event',  // type de notification
+          event.id  // relatedId (ID de l'événement)
+        );
+      }
 
     return deletedEvent;
   }
-
 }

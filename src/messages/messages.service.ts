@@ -26,7 +26,7 @@ export class MessagesService {
     });
   }
 
-  // ENVOYER UN MESSAGE DANS UNE CONVERSATION (CRÉATION D'UNE CONVERSATION SI NÉCESSAIRE)
+  // ENVOYER UN MESSAGE DANS UNE CONVERSATION
   async sendMessage(data: SendMessageDto) {
     let conversation = await this.prisma.conversation.findFirst({
       where: {
@@ -54,35 +54,47 @@ export class MessagesService {
       },
     });
 
+    // Ajout du type et relatedId
     const notificationMessage = `Vous avez reçu un nouveau message de l'utilisateur ID ${data.senderId}`;
-    await this.notificationService.createNotification(data.recipientId, notificationMessage);
+    await this.notificationService.createNotification(
+      data.recipientId,  // userId
+      notificationMessage,  // message
+      'message',  // type
+      message.id  // relatedId (ici, on passe l'ID du message)
+    );
 
     return message;
   }
 
-  // MARQUER LES MESSAGES COMME LUS DANS UNE CONVERSATION
-  async markMessagesAsRead(markReadDto: MarkReadDto) {
-    const { conversationId, userId } = markReadDto;
+// MARQUER LES MESSAGES COMME LUS DANS UNE CONVERSATION
+async markMessagesAsRead(markReadDto: MarkReadDto) {
+  const { conversationId, userId } = markReadDto;
 
-    const updatedMessages = await this.prisma.message.updateMany({
-      where: { conversationId, senderId: { not: userId }, isRead: false },
-      data: { isRead: true },
-    });
+  const updatedMessages = await this.prisma.message.updateMany({
+    where: { conversationId, senderId: { not: userId }, isRead: false },
+    data: { isRead: true },
+  });
 
-    const notificationMessage = `Vos messages dans la conversation ID ${conversationId} ont été lus`;
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { participants: true },
-    });
+  const notificationMessage = `Vos messages dans la conversation ID ${conversationId} ont été lus`;
+  const conversation = await this.prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { participants: true },
+  });
 
-    const sender = conversation?.participants.find(participant => participant.id !== userId);
-    if (sender) {
-      await this.notificationService.createNotification(sender.id, notificationMessage);
-    }
-
-    return updatedMessages;
+  const sender = conversation?.participants.find(participant => participant.id !== userId);
+  if (sender) {
+    await this.notificationService.createNotification(
+      sender.id,  // userId (l'expéditeur du message)
+      notificationMessage,  // message
+      'message',  // type (le type de notification, ici 'message')
+      conversationId  // relatedId (l'ID de la conversation, ici)
+    );
   }
 
+  return updatedMessages;
+}
+
+  
   // RÉCUPÉRER LES MESSAGES D'UNE MAIRIE POUR LES UTILISATEURS ABONNÉS
   async getMunicipalityMessages(userId: number, municipalityId: number) {
     if (isNaN(userId)) {
@@ -114,7 +126,7 @@ export class MessagesService {
     });
   }
 
-  // ENVOYER UN MESSAGE À UNE MAIRIE (SEULS LES ABONNÉS PEUVENT LE FAIRE)
+ // ENVOYER UN MESSAGE À UNE MAIRIE (SEULS LES ABONNÉS PEUVENT LE FAIRE)
   async sendMunicipalityMessage(sendMessageDto: SendMessageDto, municipalityId: number) {
     const { senderId, content } = sendMessageDto;
 
@@ -150,8 +162,12 @@ export class MessagesService {
     });
 
     const notificationMessage = `Vous avez reçu un nouveau message de l'utilisateur ID ${senderId}`;
-    await this.notificationService.createNotification(municipalityId, notificationMessage);
-
+    await this.notificationService.createNotification(
+      municipalityId,  // userId (la mairie)
+      notificationMessage,  // message
+      'message',  // type (le type de notification, ici 'message')
+      message.id  // relatedId (ID du message)
+    );
     return message;
   }
 }

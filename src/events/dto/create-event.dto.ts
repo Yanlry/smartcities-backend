@@ -1,7 +1,9 @@
 export class CreateEventDto {
   title: string;
-  description?: string;
+  description: string;
   date: Date;
-  location?: string;
-  organizerId: number; // Id de l'utilisateur qui crée l'événement
+  location: string;
+  organizerId: number; // L'organisateur de l'événement
+  reportId?: number; // Optionnel, l'ID du signalement
+  radius?: number; // Optionnel, le rayon pour associer l'événement à un signalement
 }

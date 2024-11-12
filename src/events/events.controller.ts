@@ -9,7 +9,12 @@ export class EventsController {
 
   // CRÉE UN NOUVEL ÉVÉNEMENT
   @Post()
-  create(@Body() createEventDto: CreateEventDto) {
+  async create(@Body() createEventDto: CreateEventDto) {
+    // Si reportId est présent, un rayon doit être aussi fourni
+    if (createEventDto.reportId && !createEventDto.radius) {
+      throw new BadRequestException("Un rayon (radius) doit être défini si vous associez un événement à un signalement.");
+    }
+
     return this.eventsService.create(createEventDto);
   }
 
@@ -53,7 +58,6 @@ export class EventsController {
     const id = parseInt(eventId, 10);
     return this.eventsService.rsvpToEvent(id, body.userId, body.status);
   }
-
 
   // SUPPRIME UN ÉVÉNEMENT
   @Delete(':id')

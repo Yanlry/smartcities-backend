@@ -58,7 +58,13 @@ export class GroupsService {
     });
 
     const message = `Un nouvel utilisateur (ID : ${userId}) a rejoint votre groupe (ID : ${groupId})`;
-    await this.notificationService.createNotification(group.ownerId, message);
+    await this.notificationService.createNotification(
+      group.ownerId,  // ID de l'organisateur du groupe
+      message,        // Message indiquant qu'un utilisateur a rejoint le groupe
+      "group",        // Le type de notification (ici "group" pour groupe)
+      groupId         // L'ID du groupe auquel l'utilisateur a rejoint
+    );
+    
 
     return { message: 'Vous avez rejoint le groupe avec succès' };
   }
@@ -90,7 +96,13 @@ export class GroupsService {
     });
 
     const message = `L'utilisateur (ID : ${userId}) a quitté votre groupe (ID : ${groupId})`;
-    await this.notificationService.createNotification(group.ownerId, message);
+    await this.notificationService.createNotification(
+      group.ownerId,  // ID de l'organisateur du groupe
+      message,        // Message indiquant qu'un utilisateur a quitté le groupe
+      "group",        // Le type de notification (ici "group" pour groupe)
+      groupId         // L'ID du groupe auquel l'utilisateur a quitté
+    );
+    
 
     return { message: 'Utilisateur retiré du groupe avec succès' };
   }
@@ -126,7 +138,13 @@ export class GroupsService {
 
     const message = `Le groupe (ID : ${groupId}) auquel vous apparteniez a été supprimé.`;
     for (const member of group.members) {
-      await this.notificationService.createNotification(member.id, message);
+      await this.notificationService.createNotification(
+        member.id,      // ID de chaque membre du groupe
+        message,        // Message indiquant que le groupe a été supprimé
+        "group",        // Le type de notification (ici "group" pour groupe)
+        groupId         // L'ID du groupe supprimé
+      );
+      
     }
 
     return this.prisma.group.delete({ where: { id: groupId } });

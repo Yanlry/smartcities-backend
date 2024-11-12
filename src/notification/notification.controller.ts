@@ -22,29 +22,27 @@ interface AuthenticatedRequest extends Request {
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) { }
 
-  // CREER UNE NOUVELLE NOTIFICATION POUR L'UTILISATEUR CONNECTE
-  @UseGuards(JwtAuthGuard)
-  @Post('create')
-  async createNotification(
-    @Req() request: AuthenticatedRequest,
-    @Body() body: { message: string }
-  ) {
-    const userId = request.user.id;
-    return this.notificationService.createNotification(userId, body.message);
+  // POST /notifications/create
+  @Post('/create')
+  async create(@Body() notificationData: { userId: number, message: string, type: string, relatedId: number }) {
+    // Appeler la méthode createNotification du service
+    return this.notificationService.createNotification(notificationData.userId, notificationData.message, notificationData.type, notificationData.relatedId);
   }
 
-  // ENVOYER UNE NOTIFICATION A UN AUTRE UTILISATEUR
-  @UseGuards(JwtAuthGuard)
-  @Post('send')
-  async sendNotification(
-    @Body() body: { targetUserId: number; message: string },
-    @Req() request: AuthenticatedRequest
+  // POST /notifications/send (Envoi aux utilisateurs concernés)
+  @Post('/send')
+  async sendNotifications(
+    @Body() notificationData: { userId: number, message: string, type: string, relatedId: number }
   ) {
-    const senderUserId = request.user.id;
-    return this.notificationService.createNotification(
-      body.targetUserId,
-      body.message
-    );
+    // Récupérer les abonnés sauf l'utilisateur qui envoie la notification
+    const subscribers = await this.notificationService.getSubscribers(notificationData.userId);  // Utiliser le service pour obtenir les abonnés
+
+    // Envoyer une notification à chaque abonné
+    for (const subscriber of subscribers) {
+      await this.notificationService.createNotification(subscriber.userId, notificationData.message, notificationData.type, notificationData.relatedId);
+    }
+
+    return { message: 'Notifications envoyées' };
   }
 
   // S'ABONNER AUX NOTIFICATIONS PAR ZONE GEOGRAPHIQUE (VILLES, LATITUDE, LONGITUDE, RADIUS)

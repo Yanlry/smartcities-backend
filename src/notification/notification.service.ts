@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class NotificationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   // S'ABONNER À UNE ZONE GÉOGRAPHIQUE (VILLE, LATITUDE, LONGITUDE, RADIUS)
   async subscribeToRegion({ userId, city, latitude, longitude, radius }: { userId: number; city?: string; latitude?: number; longitude?: number; radius?: number }) {
@@ -32,21 +32,70 @@ export class NotificationService {
     });
   }
 
-  // CRÉER UNE NOUVELLE NOTIFICATION POUR UN UTILISATEUR
-  async createNotification(userId: number, message: string) {
+  // Créer une notification spécifique pour les actions de l'utilisateur
+  async createNotification(userId: number, message: string, type: string, relatedId: number) {
     return this.prisma.notification.create({
       data: {
         userId,
         message,
         isRead: false,
+        type,  // Type de notification : "vote", "commentaire", "signalement mis à jour", etc.
+        relatedId, // Id lié à l'élément que la notification concerne
       },
     });
   }
 
+  async updateReportOrEventAndNotify(type: 'report' | 'event', id: number, data: any) {
+    const updated = type === 'report'
+      ? await this.prisma.report.update({ where: { id }, data })
+      : await this.prisma.event.update({ where: { id }, data });
+  
+    const message = `${type === 'report' ? 'Signalement' : 'Événement'} mis à jour (ID : ${id})`;
+  
+    let organizerId: number | undefined;
+  
+    if (type === 'event') {
+      // Récupère l'`organizerId` seulement si c'est un événement
+      const event = await this.prisma.event.findUnique({
+        where: { id },
+        select: { organizerId: true },
+      });
+  
+      if (!event) throw new NotFoundException("Événement non trouvé");
+      
+      organizerId = event.organizerId; // Assigner l'ID de l'organisateur
+    }
+  
+    // Récupérer les abonnés ou participants à notifier
+    const subscribers = await this.prisma.notificationSubscription.findMany({
+      where: { userId: { not: organizerId } }, // Ne pas inclure l'organisateur dans les notifications
+    });
+  
+    for (const subscriber of subscribers) {
+      await this.createNotification(subscriber.userId, message, type, id);
+    }
+  
+    return updated;
+  }
+  
   // OBTENIR LES NOTIFICATIONS D'UN UTILISATEUR
   async getNotifications(userId: number) {
     return await this.prisma.notification.findMany({
       where: { userId },
+    });
+  }
+
+  // Récupérer les abonnés (excluant l'utilisateur lui-même)
+  async getSubscribers(excludingUserId: number) {
+    return this.prisma.notificationSubscription.findMany({
+      where: {
+        userId: {
+          not: excludingUserId, // Exclure l'utilisateur qui envoie la notification
+        },
+      },
+      select: {
+        userId: true, // Récupérer uniquement l'ID des abonnés
+      },
     });
   }
 
@@ -82,7 +131,7 @@ export class NotificationService {
 
   // SE DÉSABONNER D'UN ABONNEMENT SPÉCIFIQUE PAR SON ID
   async unsubscribeFromSpecific(subscriptionId: number, userId: number) {
-    
+
     const id = parseInt(subscriptionId.toString(), 10);
     if (isNaN(id)) {
       throw new BadRequestException("L'ID de l'abonnement est invalide");

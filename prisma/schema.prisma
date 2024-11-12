@@ -41,18 +41,17 @@ model User {
   isSubscribed      Boolean  @default(false) // Nouveau champ pour indiquer l'abonnement
   isMunicipality Boolean  @default(false)
   notificationSubscriptions NotificationSubscription[] // Relation vers les abonnements de notification
+  latitude        Float?   // Ajout de la latitude
+  longitude       Float?   // Ajout de la longitude
 }
 
 model UserFollow {
   id           Int    @id @default(autoincrement())
   followerId   Int
   followingId  Int
-
   follower     User   @relation("FollowingRelation", fields: [followerId], references: [id])
   following    User   @relation("FollowerRelation", fields: [followingId], references: [id])
-
   createdAt    DateTime @default(now())
-
   @@unique([followerId, followingId]) // Clé unique pour éviter les doublons
 }
 
@@ -75,12 +74,14 @@ model Report {
   userId       Int
   user         User      @relation(fields: [userId], references: [id])
   votes        Vote[]
+  radius    Float?  // Ajoutez cette ligne
   comments     Comment[] // Relation inverse avec Comment
   latitude     Float     @default(0.0) 
   longitude    Float     @default(0.0)
   type         String    // Nouveau champ pour le type de rapport (par exemple, "sécurité", "pollution", etc.)
   eventId      Int?      // Relation avec Event (facultatif)
   event        Event?    @relation("EventReports", fields: [eventId], references: [id])
+  city         String?   // Ajout du champ city
 }
 
 
@@ -99,20 +100,22 @@ model Vote {
 model Like {
   id        Int      @id @default(autoincrement())
   postId    Int
-  post      Post     @relation(fields: [postId], references: [id])
   userId    Int
+  post      Post     @relation(fields: [postId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 }
 
 model Comment {
-  id           Int       @id @default(autoincrement())
-  text         String
-  createdAt    DateTime  @default(now())
-  reportId     Int
-  userId       Int
-  report       Report    @relation(fields: [reportId], references: [id])
-  user         User      @relation(fields: [userId], references: [id])
+  id        Int      @id @default(autoincrement())
+  text      String
+  reportId  Int?
+  postId    Int?
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  report    Report?  @relation(fields: [reportId], references: [id])
+  post      Post?    @relation(fields: [postId], references: [id])
+  createdAt DateTime @default(now())
 }
 
 model Post {
@@ -123,9 +126,10 @@ model Post {
   updatedAt DateTime @updatedAt
   authorId  Int
   author    User     @relation(fields: [authorId], references: [id])
-  likes         Like[] 
-  latitude     Float?    // Latitude pour la localisation sur la carte
-  longitude    Float?    // Longitude pour la localisation sur la carte
+  likes     Like[] 
+  latitude  Float?   // Latitude pour la localisation sur la carte
+  longitude Float?   // Longitude pour la localisation sur la carte
+  comments  Comment[] // Relation automatique entre 'Post' et 'Comment'
 }
 
 model Event {
@@ -137,8 +141,8 @@ model Event {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   attendees    Attendee[] // Participants à l'événement
-  organizer    User       @relation("UserEvents", fields: [organizerId], references: [id])
-  organizerId  Int
+  organizerId  Int        // Propriétaire de l'événement (organisateur)
+  organizer    User       @relation("UserEvents", fields: [organizerId], references: [id]) // Relation avec User
   invites      Invite[]   // Invitations envoyées pour cet événement
   latitude     Float     @default(0.0) 
   longitude    Float     @default(0.0)
@@ -186,13 +190,18 @@ model Message {
 }
 
 model Notification {
-  id          Int       @id @default(autoincrement())
-  message     String    // Contenu de la notification
-  isRead      Boolean   @default(false) // Statut de lecture (non lu par défaut)
-  createdAt   DateTime  @default(now()) // Date de création de la notification
-  userId      Int       // Référence à l'utilisateur
-  user        User      @relation(fields: [userId], references: [id])
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  message   String
+  type      String   // Type de notification (ex: 'vote', 'commentaire', etc.)
+  relatedId Int      // ID de l'élément concerné
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
 }
+
 
 model NotificationSubscription {
   id         Int      @id @default(autoincrement())
@@ -201,7 +210,6 @@ model NotificationSubscription {
   latitude   Float?   // Latitude du périmètre d'abonnement
   longitude  Float?   // Longitude du périmètre d'abonnement
   radius     Float?   // Rayon du périmètre en km
-
   user       User     @relation(fields: [userId], references: [id])
   createdAt  DateTime @default(now())
 }

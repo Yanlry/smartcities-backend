@@ -7,19 +7,19 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // Pour sécuriser l'acc�
 export class UserController {
   constructor(private readonly userService: UserService) { }
 
-  // Récupère un utilisateur avec le nombre de followers
+  // RECUPERER LE NOMBRE DE FOLLOWER D'UN UTILISATEUR
   @Get(':id')
   async getUserWithFollowers(@Param('id') userId: string) {
     return this.userService.getUserWithFollowers(Number(userId));
   }
 
-  // Suivre un utilisateur
+  // SUIVRE UN UTILISATEUR
   @Post(':id/follow')
   followUser(@Param('id') userId: string, @Body('followerId') followerId: number) {
     return this.userService.followUser(+userId, followerId);
   }
 
-  // Se désabonner d'un utilisateur
+  // UNFOLLOW UN UTILISATEUR
   @Delete(':id/unfollow')
   unfollowUser(@Param('id') userId: string, @Body('followerId') followerId: number) {
     return this.userService.unfollowUser(+userId, followerId);
@@ -33,12 +33,19 @@ export class UserController {
     return this.userService.getUserById(userId);
   }
 
-  // MET À JOUR LES INFORMATIONS DE PROFIL D'UN UTILISATEUR
+  // MET À JOUR LES INFORMATIONS DE PROFIL D'UN UTILISATEUR ET SON TRUST RATE
   @Put(':id')
   async updateUser(@Param('id') id: string, @Body() updateUserData: UpdateUserDto) {
     const userId = parseInt(id, 10);
     if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
-    return this.userService.updateUser(userId, updateUserData);
+    
+    // Premièrement, met à jour les informations générales
+    await this.userService.updateUser(userId, updateUserData);
+
+    // Puis, met à jour le trustRate
+    await this.userService.updateUserTrustRate(userId);
+
+    return { message: 'Profil mis à jour avec succès' };
   }
 
   // LISTE LES UTILISATEURS AVEC DES FILTRES OPTIONNELS
@@ -47,7 +54,7 @@ export class UserController {
     return this.userService.listUsers(filters);
   }
 
-  // RÉCUPÈRE LES STATISTIQUES D'UN UTILISATEUR
+  // RÉCUPÈRE LES STATISTIQUES D'UN UTILISATEUR, INCLUANT LE TRUST RATE
   @Get(':id/stats')
   async getUserStats(@Param('id') id: string) {
     const userId = parseInt(id, 10);

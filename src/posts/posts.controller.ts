@@ -31,7 +31,7 @@ export class PostsController {
         return this.postsService.updatePost(Number(id), updatePostDto);
     }
 
-    // AJOUTE OU SUPPRIME UN LIKE À UNE PUBLICATION
+    // AJOUTE OU SUPPRIME UN LIKE À UNE PUBLICATION ET MET À JOUR LE TRUSTRATE
     @Post('like')
     async toggleLike(@Body() likeData: { postId: number, userId: number }) {
         return this.postsService.toggleLike(likeData.postId, likeData.userId);
@@ -41,5 +41,11 @@ export class PostsController {
     @Delete(':id')
     async deletePost(@Param('id') id: string) {
         return this.postsService.deletePost(Number(id));
+    }
+
+    // AJOUTE UN COMMENTAIRE ET MET À JOUR LE TRUSTRATE DE L'UTILISATEUR
+    @Post('comment')
+    async commentOnPost(@Body() commentData: { postId: number; userId: number; text: string }) {
+      return this.postsService.commentOnPost(commentData);
     }
 }
