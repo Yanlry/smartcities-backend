@@ -17,7 +17,9 @@ model User {
   id            Int       @id @default(autoincrement())
   email         String    @unique
   password      String
-  name          String?
+  firstName     String  @default("Unknown")  
+  lastName      String  @default("Unknown")  
+  username      String? @unique
   following     UserFollow[] @relation("FollowingRelation")
   followers     UserFollow[] @relation("FollowerRelation")
   createdAt     DateTime  @default(now())

@@ -15,7 +15,7 @@ export class AuthService {
   }
 
   // INSCRIT UN NOUVEL UTILISATEUR DANS LA BASE DE DONNÉES APRÈS AVOIR HASHÉ SON MOT DE PASSE
-  async signup(email: string, password: string, name: string) {
+  async signup(email: string, password: string, username: string, lastName: string, firstName: string) {
     const existingUser = await this.prisma.user.findUnique({ where: { email } });
     if (existingUser) throw new ConflictException('Cet email est déjà utilisé.');
 
@@ -25,8 +25,9 @@ export class AuthService {
       data: {
         email,
         password: hashedPassword,
-        name,
-        // On ne spécifie pas de valeur initiale pour `reports` car c'est une relation
+        lastName,
+        firstName,
+        username,
       },
     });
   }

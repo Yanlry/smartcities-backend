@@ -2,6 +2,7 @@ import { Controller, Post, Body, Req, UseGuards, Get, Res, HttpStatus, BadReques
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Request, Response } from 'express';
+import { first } from 'rxjs';
 
 @Controller('auth')
 export class AuthController {
@@ -9,8 +10,8 @@ export class AuthController {
 
   // CRÉE UN NOUVEL UTILISATEUR AVEC UN EMAIL, UN MOT DE PASSE ET UN NOM FOURNIS
   @Post('signup')
-  async signup(@Body('email') email: string, @Body('password') password: string, @Body('name') name: string) {
-    return this.authService.signup(email, password, name);
+  async signup(@Body('email') email: string, @Body('password') password: string, @Body('lastName') lastName: string , @Body('firstName') firstName: string, @Body('username') username: string) {
+    return this.authService.signup(email, password, lastName, firstName, username);
   }
 
   // AUTHENTIFIE UN UTILISATEUR ET RETOURNE UN TOKEN JWT S'IL RÉUSSIT

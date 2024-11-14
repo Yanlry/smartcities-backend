@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
+import { last } from 'rxjs';
 
 @Injectable()
 export class UserService {
@@ -15,7 +16,9 @@ export class UserService {
       select: {
         id: true,
         email: true,
-        name: true,
+        username: true,
+        lastName: true,
+        firstName: true,
         createdAt: true,
         reports: true, // RÉCUPÈRE LE NOMBRE DE SIGNALEMENTS
         trustRate: true,
@@ -72,7 +75,9 @@ export class UserService {
       select: {
         id: true,
         email: true,
-        name: true,
+        username: true,
+        lastName: true,
+        firstName: true,
         createdAt: true,
         reports: true,
       },
@@ -112,7 +117,7 @@ export class UserService {
     // Ajoutez ici les valeurs des arguments `type` et `relatedId`
     await this.notificationService.createNotification(
       userId, 
-      `${follower.name} vous suit maintenant.`,
+      `${follower.username} vous suit maintenant.`,
       "FOLLOW",           // Exemple de valeur pour le type
       follow.id           // Par exemple, l'ID du suivi
     );
