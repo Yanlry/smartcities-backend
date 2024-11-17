@@ -18,7 +18,7 @@ export class EventsController {
     return this.eventsService.create(createEventDto);
   }
 
-  // RÉCUPÈRE TOUS LES ÉVÉNEMENTS
+  // RÉCUPÈRE TOUS LES ÉVÉNEMENT
   @Get()
   findAll() {
     return this.eventsService.findAll();
