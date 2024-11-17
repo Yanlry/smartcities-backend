@@ -10,9 +10,10 @@ import { MessagesModule } from './messages/messages.module';
 import { MapModule } from './map/map.module';
 import { NotificationModule } from './notification/notification.module';
 import { StatsModule } from './stats/stats.module';
+import { ConfigModule } from './config/config.module';
 
 @Module({
-  imports: [AuthModule, UserModule, ReportModule, PostsModule, GroupsModule, EventsModule, MessagesModule, MapModule, NotificationModule, StatsModule],
+  imports: [AuthModule, ConfigModule, UserModule, ReportModule, PostsModule, GroupsModule, EventsModule, MessagesModule, MapModule, NotificationModule, StatsModule],
   providers: [PrismaService],
 })
 export class AppModule {}

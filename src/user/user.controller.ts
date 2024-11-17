@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Delete, Param, Body, Query, BadRequestException, UseGuards } from '@nestjs/common';
+import { Controller,Patch, Get, Put, Post, Delete, Param, Body, Query, BadRequestException, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // Pour sécuriser l'accès avec un token JWT

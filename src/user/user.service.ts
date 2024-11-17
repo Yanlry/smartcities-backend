@@ -39,6 +39,7 @@ export class UserService {
     });
     return updatedUser;
   }
+  
 
   // MET A JOUR LE TAUX DE CONFIANCE DE L'UTILISATEUR
   async updateUserTrustRate(userId: number) {
@@ -161,4 +162,6 @@ export class UserService {
     await this.prisma.user.delete({ where: { id: userId } });
     return { message: 'Utilisateur supprimé avec succès' };
   }
+
+  
 }

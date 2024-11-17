@@ -7,26 +7,42 @@ export class ReportService {
   constructor(
     private prisma: PrismaService,
     private readonly notificationService: NotificationService,
-  ) {}
+  ) { }
 
- // CRÉE UN NOUVEAU SIGNAL
+  // CRÉE UN NOUVEAU SIGNAL
   async createReport(reportData: any) {
-    // Vérifier que les informations de localisation sont présentes
+    console.log('Données reçues :', reportData);
+
+    // Validation des données requises
     if (!reportData.title || !reportData.description || !reportData.userId || !reportData.type) {
-      throw new BadRequestException('Title, description, userId, and type are required');
+      throw new BadRequestException('Les champs title, description, userId et type sont obligatoires');
     }
 
-    // Vérifier que le lieu (ville, latitude, longitude) est présent
-    if (!reportData.city || !reportData.latitude || !reportData.longitude) {
-      throw new BadRequestException('City, latitude, and longitude are required to create a report');
+    if (!reportData.city || reportData.latitude === undefined || reportData.longitude === undefined) {
+      throw new BadRequestException('Les champs city, latitude et longitude sont obligatoires');
     }
 
-    // Vérification de la proximité (rayon de 50m)
-    if (!await this.isWithinRadius(reportData.latitude, reportData.longitude, reportData.userId)) {
-      throw new BadRequestException('Vous devez être dans un rayon de 50 mètres pour signaler un événement');
+    // Vérifier si l'utilisateur existe
+    const user = await this.prisma.user.findUnique({ where: { id: reportData.userId } });
+    console.log('Utilisateur trouvé :', user);
+
+    if (!user) {
+      throw new BadRequestException('Utilisateur non trouvé');
     }
 
-    // Créer le signalement dans la base de données avec toutes les informations nécessaires
+    // Met à jour les coordonnées de l'utilisateur si elles sont absentes
+    if (!user.latitude || !user.longitude) {
+      console.log("Mise à jour des coordonnées de l'utilisateur...");
+      await this.prisma.user.update({
+        where: { id: reportData.userId },
+        data: {
+          latitude: reportData.latitude,
+          longitude: reportData.longitude,
+        },
+      });
+    }
+
+    // Création du signalement dans la base de données
     const report = await this.prisma.report.create({
       data: {
         title: reportData.title,
@@ -34,17 +50,19 @@ export class ReportService {
         userId: reportData.userId,
         latitude: reportData.latitude,
         longitude: reportData.longitude,
-        city: reportData.city,  // Inclure la ville
+        city: reportData.city,
         type: reportData.type,
         createdAt: new Date(),
       },
     });
 
-    // Trouver les abonnés proches dans la même ville ou rayon
+    console.log('Signalement créé :', report);
+
+    // Notification des abonnés proches
     const nearbySubscribers = await this.prisma.notificationSubscription.findMany({
       where: {
         OR: [
-          { city: reportData.city },  // Ville à vérifier
+          { city: reportData.city },
           {
             latitude: {
               gte: reportData.latitude - 0.1,
@@ -60,31 +78,40 @@ export class ReportService {
       select: { userId: true },
     });
 
-    // Envoyer une notification à chaque abonné dans la zone
     for (const subscriber of nearbySubscribers) {
       await this.notificationService.createNotification(
-        subscriber.userId,  // userId (l'utilisateur qui recevra la notification)
-        `Nouveau signalement dans votre zone : ${reportData.title}`,  // message (le message de notification)
-        'report',  // type (le type de notification, ici 'report')
-        report.id   // relatedId (l'ID du rapport concerné)
-      );      
+        subscriber.userId,
+        `Nouveau signalement dans votre zone : ${reportData.title}`,
+        'report',
+        report.id,
+      );
     }
 
     return report;
   }
 
-  async isWithinRadius(latitude: number, longitude: number, userId: number): Promise<boolean> {
+
+  async isWithinRadius(lat1: number, lon1: number, userId: number): Promise<boolean> {
+    // Récupérer les coordonnées de l'utilisateur
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { latitude: true, longitude: true },
     });
-  
+
+    // Vérification des coordonnées de l'utilisateur
     if (!user || user.latitude === null || user.longitude === null) {
       throw new BadRequestException("Utilisateur non trouvé ou coordonnées manquantes");
     }
-  
-    const distance = this.calculateDistance(latitude, longitude, user.latitude, user.longitude);
-    return distance <= 50; // 50 mètres de rayon
+
+    // Calculer la distance
+    const distance = this.calculateDistance(lat1, lon1, user.latitude, user.longitude);
+    console.log(`Distance calculée : ${distance} mètres`);
+    console.log('Coordonnées utilisateur :', user.latitude, user.longitude);
+    console.log('Coordonnées signalement :', lat1, lon1);
+    console.log('Distance calculée :', distance);
+
+    // Vérifier si la distance est inférieure ou égale à 50 mètres
+    return distance <= 50;
   }
   
   // MISE À JOUR DU TRUST RATE DE L'UTILISATEUR
@@ -108,22 +135,26 @@ export class ReportService {
     await this.prisma.user.update({
       where: { id: userId },
       data: {
-        trustRate: validVotes > 0 ? trustRate / validVotes : 0, 
+        trustRate: validVotes > 0 ? trustRate / validVotes : 0,
       },
     });
   }
 
-  // CALCUL DE LA DISTANCE ENTRE DEUX POINTS (utilise la formule Haversine)
-  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371; // Rayon de la Terre en km
-    const dLat = this.degreesToRadians(lat2 - lat1);
-    const dLon = this.degreesToRadians(lon2 - lon1);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(this.degreesToRadians(lat1)) * Math.cos(this.degreesToRadians(lat2)) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371e3; // Rayon de la Terre en mètres
+    const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+
+    const φ1 = toRadians(lat1);
+    const φ2 = toRadians(lat2);
+    const Δφ = toRadians(lat2 - lat1);
+    const Δλ = toRadians(lon2 - lon1);
+
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c * 1000; // Distance en mètres
-    return distance;
+
+    return R * c; // Distance en mètres
   }
 
   // CONVERSION DES DEGRÉS EN RADIANS

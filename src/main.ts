@@ -1,3 +1,6 @@
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import {
@@ -14,5 +17,6 @@ async function bootstrap() {
 
   app.use(helmet.default()); // Utilisation de Helmet avec .default()
   await app.listen(3000);
+  console.log(`Application is running on: http://localhost:3000`);
 }
 bootstrap();
