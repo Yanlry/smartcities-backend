@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, InternalServerErrorException} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 
@@ -90,7 +90,6 @@ export class ReportService {
     return report;
   }
 
-
   async isWithinRadius(lat1: number, lon1: number, userId: number): Promise<boolean> {
     // Récupérer les coordonnées de l'utilisateur
     const user = await this.prisma.user.findUnique({
@@ -113,7 +112,23 @@ export class ReportService {
     // Vérifier si la distance est inférieure ou égale à 50 mètres
     return distance <= 50;
   }
-  
+  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371e3; // Rayon de la Terre en mètres
+    const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+
+    const φ1 = toRadians(lat1);
+    const φ2 = toRadians(lat2);
+    const Δφ = toRadians(lat2 - lat1);
+    const Δλ = toRadians(lon2 - lon1);
+
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance en mètres
+  }
+
   // MISE À JOUR DU TRUST RATE DE L'UTILISATEUR
   async updateUserTrustRate(userId: number) {
     const votes = await this.prisma.vote.findMany({
@@ -140,23 +155,6 @@ export class ReportService {
     });
   }
 
-  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371e3; // Rayon de la Terre en mètres
-    const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
-
-    const φ1 = toRadians(lat1);
-    const φ2 = toRadians(lat2);
-    const Δφ = toRadians(lat2 - lat1);
-    const Δλ = toRadians(lon2 - lon1);
-
-    const a =
-      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance en mètres
-  }
-
   // CONVERSION DES DEGRÉS EN RADIANS
   private degreesToRadians(degrees: number): number {
     return degrees * (Math.PI / 180);
@@ -164,8 +162,27 @@ export class ReportService {
 
   // LISTE LES SIGNALS AVEC FILTRES OPTIONNELS, ET COMPTE LES VOTES
   async listReports(filters: any) {
+    const { latitude, longitude, radiusKm, ...otherFilters } = filters;
+
+    let where: any = { ...otherFilters };
+
+    // Ajout du filtre géographique si latitude, longitude et radiusKm sont fournis
+    if (latitude && longitude && radiusKm) {
+      const radiusInDegrees = Number(radiusKm) / 111; // Conversion du rayon en degrés
+
+      where.latitude = {
+        gte: Number(latitude) - radiusInDegrees,
+        lte: Number(latitude) + radiusInDegrees,
+      };
+      where.longitude = {
+        gte: Number(longitude) - radiusInDegrees,
+        lte: Number(longitude) + radiusInDegrees,
+      };
+    }
+
+    // Récupération des signalements avec Prisma
     const reports = await this.prisma.report.findMany({
-      where: filters,
+      where,
       select: {
         id: true,
         title: true,
@@ -173,7 +190,10 @@ export class ReportService {
         createdAt: true,
         updatedAt: true,
         userId: true,
+        city: true,
         type: true,
+        latitude: true,
+        longitude: true,
         votes: {
           select: {
             type: true,
@@ -182,20 +202,48 @@ export class ReportService {
       },
     });
 
-    return reports.map((report) => {
+    // Fonction pour calculer la distance à vol d'oiseau (Haversine)
+    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+      const toRadians = (degree: number) => (degree * Math.PI) / 180;
+      const R = 6371; // Rayon de la Terre en kilomètres
+
+      const dLat = toRadians(lat2 - lat1);
+      const dLon = toRadians(lon2 - lon1);
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+      return R * c; // Distance en km
+    };
+
+    // Ajout des distances et tri par distance
+    const reportsWithDistances = reports.map((report) => {
+      const distance = calculateDistance(
+        Number(latitude),
+        Number(longitude),
+        report.latitude,
+        report.longitude
+      );
+
       const upVotes = report.votes.filter((vote) => vote.type === 'up').length;
       const downVotes = report.votes.filter((vote) => vote.type === 'down').length;
-
-      // Calculer la validité des votes et ajuster le trustRate
       const trustRate = this.calculateTrustRate(report.userId);
 
       return {
         ...report,
+        distance, // Ajout de la distance calculée
         upVotes,
         downVotes,
         trustRate,
       };
     });
+
+    // Tri par distance
+    return reportsWithDistances.sort((a, b) => a.distance - b.distance);
   }
 
   // CALCUL DU TRUST RATE DE L'UTILISATEUR EN FONCTION DE SES VOTES
@@ -215,30 +263,75 @@ export class ReportService {
         trustRate -= 1;
       }
     });
-
     return validVotes > 0 ? trustRate / validVotes : 0; // Moyenne des votes valides
   }
 
-  // RÉCUPÈRE LES DÉTAILS D'UN SIGNAL PAR ID
-  async getReportById(id: number) {
-    return this.prisma.report.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        createdAt: true,
-        updatedAt: true,
-        userId: true,
-        type: true,
-        votes: {
-          select: {
-            type: true,
-          },
+ // RÉCUPÈRE LES DÉTAILS D'UN SIGNAL PAR ID AVEC DISTANCE ET LOCALISATION
+ async getReportById(id: number | string, latitude: number, longitude: number) {
+  // Convertir l'ID en entier
+  const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
+
+  // Vérification si l'ID est bien un entier valide
+  if (isNaN(numericId)) {
+    throw new BadRequestException('ID invalide');
+  }
+
+  const report = await this.prisma.report.findUnique({
+    where: { id: numericId },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true,
+      userId: true,
+      user: true,
+      type: true,
+      latitude: true,
+      longitude: true,
+      city: true,
+      votes: {
+        select: {
+          type: true,
         },
       },
-    });
+    },
+  });
+
+  if (!report) {
+    throw new NotFoundException('Signalement introuvable');
   }
+
+  // Calcul de la distance
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const toRadians = (degree: number) => (degree * Math.PI) / 180;
+    const R = 6371; // Rayon de la Terre en kilomètres
+
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance en km
+  };
+
+  const distance = calculateDistance(latitude, longitude, report.latitude, report.longitude);
+
+  const upVotes = report.votes.filter((vote) => vote.type === 'up').length;
+  const downVotes = report.votes.filter((vote) => vote.type === 'down').length;
+
+  return {
+    ...report,
+    distance,
+    upVotes,
+    downVotes,
+  };
+}
 
   // MET À JOUR UN SIGNAL
   async updateReport(id: number, updateData: any) {
@@ -257,26 +350,51 @@ export class ReportService {
 
   // VOTE POUR OU CONTRE UN SIGNAL
   async voteOnReport(voteData: { reportId: number, userId: number, type: string, latitude: number, longitude: number }) {
-    const { reportId, userId, type, latitude, longitude } = voteData;
-
-    // Vérifier que l'utilisateur est à proximité avant de permettre le vote
-    if (!(await this.isWithinRadius(latitude, longitude, userId))) {
-      throw new BadRequestException('Vous devez être dans un rayon de 50 mètres pour voter');
+    const { reportId, userId, type } = voteData;
+  
+    try {
+      console.log('Données reçues dans voteOnReport :', voteData);
+  
+      // Assurez-vous que 'type' est valide avant de continuer
+      if (!type || !['up', 'down'].includes(type)) {
+        throw new BadRequestException('Type de vote invalide.');
+      }
+  
+      // Vérifiez si le signalement existe
+      const report = await this.prisma.report.findUnique({ where: { id: reportId } });
+      if (!report) {
+        throw new NotFoundException(`Signalement introuvable pour l'ID : ${reportId}`);
+      }
+  
+      // Vérifiez si l'utilisateur existe
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new NotFoundException(`Utilisateur introuvable pour l'ID : ${userId}`);
+      }
+  
+      // Enregistrement du vote
+      const vote = await this.prisma.vote.create({
+        data: {
+          reportId,
+          userId,
+          type, // S'assurer que ce champ est défini
+        },
+      });
+  
+      console.log('Vote enregistré avec succès :', vote);
+  
+      // Mise à jour du trustRate de l'utilisateur
+      await this.updateUserTrustRate(userId);
+  
+      return { message: 'Vote enregistré avec succès' };
+    } catch (error) {
+      console.error('Erreur dans le service voteOnReport :', error);
+      throw new InternalServerErrorException('Erreur lors de l\'enregistrement du vote');
     }
-
-    await this.prisma.vote.create({
-      data: {
-        reportId,
-        userId,
-        type,
-      },
-    });
-
-    // Mettre à jour le trustRate de l'utilisateur après un vote
-    await this.updateUserTrustRate(userId);
-
-    return { message: 'Vote enregistré avec succès' };
   }
+  
+  
+
 
   // AJOUTE UN COMMENTAIRE À UN SIGNAL
   async commentOnReport(commentData: { reportId: number, userId: number, text: string, latitude: number, longitude: number }) {

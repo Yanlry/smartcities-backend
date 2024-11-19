@@ -17,15 +17,40 @@ export class ReportController {
 
   // LISTE LES SIGNALS AVEC FILTRES OPTIONNELS
   @Get()
-  async listReports(@Query() filters: any) {
-    return this.reportService.listReports(filters);
+  async listReports(
+    @Query() otherFilters: any, 
+    @Query('latitude') latitude?: string,
+    @Query('longitude') longitude?: string, 
+    @Query('radiusKm') radiusKm: string = '10', 
+  ) {
+    // Validation des paramètres géographiques
+    if ((latitude && isNaN(Number(latitude))) || (longitude && isNaN(Number(longitude)))) {
+      throw new BadRequestException('Latitude et longitude doivent être des nombres valides.');
+    }
+    if (radiusKm && isNaN(Number(radiusKm))) {
+      throw new BadRequestException('radiusKm doit être un nombre valide.');
+    }
+    // Appel du service avec les paramètres validés
+    return this.reportService.listReports({ latitude, longitude, radiusKm, ...otherFilters });
   }
+  
 
-  // RÉCUPÈRE LES DÉTAILS D'UN SIGNAL PAR ID
+
+  
   @Get(':id')
-  async getReportById(@Param('id') id: string) {
-    return this.reportService.getReportById(Number(id));
+  async getReportById(
+    @Param('id') id: number,
+    @Query('latitude') latitude?: string,
+    @Query('longitude') longitude?: string
+  ) {
+    if (!latitude || !longitude) {
+      throw new BadRequestException('Latitude and longitude are required');
+    }
+  
+    return this.reportService.getReportById(id, Number(latitude), Number(longitude));
   }
+  
+
 
   // MET À JOUR UN SIGNAL
   @Put(':id')
@@ -42,12 +67,23 @@ export class ReportController {
   // VOTE POUR OU CONTRE UN SIGNAL
   @Post('vote')
   async voteOnReport(@Body() voteData: any) {
-    // Vérifier que la latitude et la longitude sont présentes pour valider la proximité
-    if (!voteData.latitude || !voteData.longitude) {
-      throw new BadRequestException('La latitude et la longitude sont nécessaires pour voter');
+    console.log('Données reçues pour voter :', voteData);
+  
+    const { reportId, userId, type, latitude, longitude } = voteData;
+  
+    // Vérifiez que 'type' est défini et valide
+    if (!type || !['up', 'down'].includes(type)) {
+      throw new BadRequestException('Le type de vote est invalide ou manquant.');
     }
+  
+    if (!latitude || !longitude) {
+      throw new BadRequestException('La latitude et la longitude sont nécessaires pour voter.');
+    }
+  
     return this.reportService.voteOnReport(voteData);
   }
+  
+  
 
   // AJOUTE UN COMMENTAIRE À UN SIGNAL
   @Post('comment')

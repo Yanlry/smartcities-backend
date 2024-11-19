@@ -27,6 +27,7 @@
     "@nestjs/platform-express": "^10.4.7",
     "@prisma/client": "^5.22.0",
     "@react-native-async-storage/async-storage": "^2.1.0",
+    "@react-native-community/geolocation": "^3.4.0",
     "@reduxjs/toolkit": "^2.3.0",
     "@sendgrid/mail": "^8.1.4",
     "bcrypt": "^5.1.1",
