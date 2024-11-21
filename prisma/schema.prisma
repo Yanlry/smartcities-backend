@@ -84,6 +84,8 @@ model Report {
   eventId      Int?      // Relation avec Event (facultatif)
   event        Event?    @relation("EventReports", fields: [eventId], references: [id])
   city         String?   // Ajout du champ city
+  upVotes      Int       @default(0) // Nombre de votes positifs
+  downVotes    Int       @default(0) // Nombre de votes négatifs
 }
 
 
@@ -97,7 +99,10 @@ model Vote {
   eventId      Int?      // Relation optionnelle avec Event
   event        Event?    @relation("EventVotes", fields: [eventId], references: [id]) // Ajoutez cette relation
   createdAt    DateTime  @default(now()) // Ajoute cette ligne
+
+  @@unique([reportId, userId]) // Contrainte unique ajoutée
 }
+
 
 model Like {
   id        Int      @id @default(autoincrement())

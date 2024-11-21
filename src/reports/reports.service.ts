@@ -327,7 +327,7 @@ export class ReportService {
 
   return {
     ...report,
-    distance,
+    distance: distance < 0.001 ? 0 : distance,
     upVotes,
     downVotes,
   };
@@ -348,54 +348,69 @@ export class ReportService {
     });
   }
 
-  // VOTE POUR OU CONTRE UN SIGNAL
   async voteOnReport(voteData: { reportId: number, userId: number, type: string, latitude: number, longitude: number }) {
     const { reportId, userId, type } = voteData;
   
     try {
-      console.log('Données reçues dans voteOnReport :', voteData);
-  
-      // Assurez-vous que 'type' est valide avant de continuer
       if (!type || !['up', 'down'].includes(type)) {
         throw new BadRequestException('Type de vote invalide.');
       }
-  
-      // Vérifiez si le signalement existe
       const report = await this.prisma.report.findUnique({ where: { id: reportId } });
       if (!report) {
         throw new NotFoundException(`Signalement introuvable pour l'ID : ${reportId}`);
       }
-  
-      // Vérifiez si l'utilisateur existe
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
       if (!user) {
         throw new NotFoundException(`Utilisateur introuvable pour l'ID : ${userId}`);
       }
+      const existingVote = await this.prisma.vote.findFirst({
+        where: {
+          reportId,
+          userId,
+        },
+      });
   
-      // Enregistrement du vote
+      if (existingVote) {
+        throw new BadRequestException('Vous avez déjà voté pour ce signalement.');
+      }
       const vote = await this.prisma.vote.create({
         data: {
           reportId,
           userId,
-          type, // S'assurer que ce champ est défini
+          type,
         },
       });
-  
-      console.log('Vote enregistré avec succès :', vote);
-  
-      // Mise à jour du trustRate de l'utilisateur
+      const updatedReport = await this.prisma.report.update({
+        where: { id: reportId },
+        data: {
+          upVotes: type === 'up' ? { increment: 1 } : undefined,
+          downVotes: type === 'down' ? { increment: 1 } : undefined,
+        },
+      });
       await this.updateUserTrustRate(userId);
   
-      return { message: 'Vote enregistré avec succès' };
+      return {
+        message: 'Vote enregistré avec succès',
+        updatedVotes: {
+          upVotes: updatedReport.upVotes,
+          downVotes: updatedReport.downVotes,
+        },
+      };
     } catch (error) {
-      console.error('Erreur dans le service voteOnReport :', error);
+  
+      // Log des erreurs spécifiques pour un meilleur débogage
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        console.error('Erreur métier :', error.message);
+      } else {
+        console.error('Erreur inattendue :', error);
+      }
       throw new InternalServerErrorException('Erreur lors de l\'enregistrement du vote');
     }
   }
   
   
-
-
+  
+  
   // AJOUTE UN COMMENTAIRE À UN SIGNAL
   async commentOnReport(commentData: { reportId: number, userId: number, text: string, latitude: number, longitude: number }) {
     const { reportId, userId, text, latitude, longitude } = commentData;

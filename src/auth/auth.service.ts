@@ -34,22 +34,31 @@ export class AuthService {
 
   // AUTHENTIFIE L'UTILISATEUR ET RETOURNE UN ACCESS TOKEN ET UN REFRESH TOKEN SI LES IDENTIFIANTS SONT VALIDES
   async login(email: string, password: string) {
+    // Vérification de l'utilisateur
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !(await compare(password, user.password))) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
-
+  
+    // Génération des tokens
     const payload = { userId: user.id, email: user.email };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' }); // TOKEN D'ACCÈS VALIDE 15 MINUTES
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '30d' }); // TOKEN DE RAFRAÎCHISSEMENT VALIDE 30 JOURS
-
+  
+    // Hachage et stockage du refresh token
     const hashedRefreshToken = await hash(refreshToken, 10);
     await this.prisma.user.update({
       where: { id: user.id },
       data: { refreshToken: hashedRefreshToken },
     });
-
-    return { message: 'Connexion réussie', accessToken, refreshToken };
+  
+    // Retour de l'ID utilisateur et des tokens
+    return {
+      message: 'Connexion réussie',
+      accessToken,
+      refreshToken,
+      userId: user.id, // Ajout explicite du userId dans la réponse
+    };
   }
 
   // VÉRIFIE ET RÉGÉNÈRE UN NOUVEAU ACCESS TOKEN UTILISANT UN REFRESH TOKEN VALIDE
@@ -123,4 +132,25 @@ export class AuthService {
 
     return { message: 'Mot de passe réinitialisé avec succès' };
   }
+
+  async getUserFromToken(token: string) {
+    const payload = this.jwtService.verify(token); // Décoder le token
+    console.log('Payload décodé du token :', payload); // Log le payload du token
+  
+    // Trouver l'utilisateur correspondant
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    });
+  
+    console.log('Utilisateur trouvé dans la base de données :', user); // Log l'utilisateur trouvé
+  
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+  
+    return user;
+  }
+  
+  
 }

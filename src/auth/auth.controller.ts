@@ -1,12 +1,16 @@
-import { Controller, Post, Body, Req, UseGuards, Get, Res, HttpStatus, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards, Get, Res, HttpStatus, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Request, Response } from 'express';
 import { first } from 'rxjs';
+import { JwtService } from '@nestjs/jwt';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(
+    private readonly authService: AuthService,
+    private readonly jwtService: JwtService
+  ) { }
 
   // CRÉE UN NOUVEL UTILISATEUR AVEC UN EMAIL, UN MOT DE PASSE ET UN NOM FOURNIS
   @Post('signup')
@@ -50,4 +54,16 @@ export class AuthController {
   async refreshToken(@Body('userId') userId: number, @Body('refreshToken') refreshToken: string) {
     return this.authService.refreshToken(userId, refreshToken);
   }
+  
+  @Get('me')
+async getMe(@Req() req: Request) {
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    throw new UnauthorizedException('Token manquant');
+  }
+
+  return this.authService.getUserFromToken(token);
+}
+
 }

@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query, BadRequestException } from '@nestjs/common';
 import { ReportService } from './reports.service';
-
+import { VoteOnReportDto } from './dto/vote-on-report.dto';
 @Controller('reports')
 export class ReportController {
   constructor(private readonly reportService: ReportService) {}
@@ -33,10 +33,7 @@ export class ReportController {
     // Appel du service avec les paramètres validés
     return this.reportService.listReports({ latitude, longitude, radiusKm, ...otherFilters });
   }
-  
 
-
-  
   @Get(':id')
   async getReportById(
     @Param('id') id: number,
@@ -46,12 +43,9 @@ export class ReportController {
     if (!latitude || !longitude) {
       throw new BadRequestException('Latitude and longitude are required');
     }
-  
     return this.reportService.getReportById(id, Number(latitude), Number(longitude));
   }
   
-
-
   // MET À JOUR UN SIGNAL
   @Put(':id')
   async updateReport(@Param('id') id: string, @Body() updateData: any) {
@@ -66,14 +60,14 @@ export class ReportController {
 
   // VOTE POUR OU CONTRE UN SIGNAL
   @Post('vote')
-  async voteOnReport(@Body() voteData: any) {
+  async voteOnReport(@Body() voteData: VoteOnReportDto) {
     console.log('Données reçues pour voter :', voteData);
   
     const { reportId, userId, type, latitude, longitude } = voteData;
   
-    // Vérifiez que 'type' est défini et valide
-    if (!type || !['up', 'down'].includes(type)) {
-      throw new BadRequestException('Le type de vote est invalide ou manquant.');
+    // Validation des données
+    if (!['up', 'down'].includes(type)) {
+      throw new BadRequestException('Le type de vote est invalide.');
     }
   
     if (!latitude || !longitude) {
@@ -83,8 +77,6 @@ export class ReportController {
     return this.reportService.voteOnReport(voteData);
   }
   
-  
-
   // AJOUTE UN COMMENTAIRE À UN SIGNAL
   @Post('comment')
   async commentOnReport(@Body() commentData: any) {
