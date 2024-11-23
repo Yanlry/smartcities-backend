@@ -12,7 +12,7 @@ export class MapController {
   }
 
   // RÉCUPÉRER TOUS LES ÉVÉNEMENTS
-  @Get('/events')
+  @Get('/events' )
   async getEvents() {
     return await this.mapService.getEvents(); // Appelle le service pour récupérer les événements
   }
