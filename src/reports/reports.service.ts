@@ -160,68 +160,68 @@ export class ReportService {
     return degrees * (Math.PI / 180);
   }
 
-  // LISTE LES SIGNALS AVEC FILTRES OPTIONNELS, ET COMPTE LES VOTES
-  async listReports(filters: any) {
-    const { latitude, longitude, radiusKm, ...otherFilters } = filters;
+  // Liste les signalements avec filtres optionnels
+async listReports(filters: any) {
+  const { latitude, longitude, radiusKm, ...otherFilters } = filters;
 
-    let where: any = { ...otherFilters };
+  let where: any = { ...otherFilters };
 
-    // Ajout du filtre géographique si latitude, longitude et radiusKm sont fournis
-    if (latitude && longitude && radiusKm) {
-      const radiusInDegrees = Number(radiusKm) / 111; // Conversion du rayon en degrés
+  // Validation des coordonnées
+  if (latitude && longitude && radiusKm) {
+    const radiusInDegrees = Number(radiusKm) / 111; // Approximation en degrés
 
-      where.latitude = {
-        gte: Number(latitude) - radiusInDegrees,
-        lte: Number(latitude) + radiusInDegrees,
-      };
-      where.longitude = {
-        gte: Number(longitude) - radiusInDegrees,
-        lte: Number(longitude) + radiusInDegrees,
-      };
-    }
+    where.latitude = {
+      gte: Number(latitude) - radiusInDegrees,
+      lte: Number(latitude) + radiusInDegrees,
+    };
+    where.longitude = {
+      gte: Number(longitude) - radiusInDegrees,
+      lte: Number(longitude) + radiusInDegrees,
+    };
+  }
 
-    // Récupération des signalements avec Prisma
-    const reports = await this.prisma.report.findMany({
-      where,
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        createdAt: true,
-        updatedAt: true,
-        userId: true,
-        city: true,
-        type: true,
-        latitude: true,
-        longitude: true,
-        votes: {
-          select: {
-            type: true,
-          },
+  // Récupération des signalements
+  const reports = await this.prisma.report.findMany({
+    where,
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true,
+      userId: true,
+      city: true,
+      type: true,
+      latitude: true,
+      longitude: true,
+      votes: {
+        select: {
+          type: true,
         },
       },
-    });
+    },
+  });
 
-    // Fonction pour calculer la distance à vol d'oiseau (Haversine)
-    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-      const toRadians = (degree: number) => (degree * Math.PI) / 180;
-      const R = 6371; // Rayon de la Terre en kilomètres
+  // Fonction pour calculer la distance (Haversine)
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity; // Vérifie les valeurs manquantes
+    const toRadians = (degree: number) => (degree * Math.PI) / 180;
+    const R = 6371; // Rayon de la Terre en km
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRadians(lat1)) *
+        Math.cos(toRadians(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance en km
+  };
 
-      const dLat = toRadians(lat2 - lat1);
-      const dLon = toRadians(lon2 - lon1);
-
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-      return R * c; // Distance en km
-    };
-
-    // Ajout des distances et tri par distance
-    const reportsWithDistances = reports.map((report) => {
+  // Ajout des distances et votes
+  const reportsWithDistances = await Promise.all(
+    reports.map(async (report) => {
       const distance = calculateDistance(
         Number(latitude),
         Number(longitude),
@@ -231,20 +231,24 @@ export class ReportService {
 
       const upVotes = report.votes.filter((vote) => vote.type === 'up').length;
       const downVotes = report.votes.filter((vote) => vote.type === 'down').length;
-      const trustRate = this.calculateTrustRate(report.userId);
+
+      // Vérifiez si `calculateTrustRate` est asynchrone
+      const trustRate = await this.calculateTrustRate(report.userId);
 
       return {
         ...report,
-        distance, // Ajout de la distance calculée
+        distance,
         upVotes,
         downVotes,
         trustRate,
       };
-    });
+    })
+  );
 
-    // Tri par distance
-    return reportsWithDistances.sort((a, b) => a.distance - b.distance);
-  }
+  // Tri par distance
+  return reportsWithDistances.sort((a, b) => a.distance - b.distance);
+}
+
 
   // CALCUL DU TRUST RATE DE L'UTILISATEUR EN FONCTION DE SES VOTES
   private async calculateTrustRate(userId: number): Promise<number> {
