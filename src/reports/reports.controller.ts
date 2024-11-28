@@ -33,7 +33,10 @@ export class ReportController {
     // Appel du service avec les paramètres validés
     return this.reportService.listReports({ latitude, longitude, radiusKm, ...otherFilters });
   }
-
+  @Get('/categories')
+  async listCategories() {
+    return this.reportService.listCategories();
+  }
   @Get(':id')
   async getReportById(
     @Param('id') id: number,
@@ -45,6 +48,8 @@ export class ReportController {
     }
     return this.reportService.getReportById(id, Number(latitude), Number(longitude));
   }
+
+
   
   // MET À JOUR UN SIGNAL
   @Put(':id')

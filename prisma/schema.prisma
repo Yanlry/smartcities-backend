@@ -74,34 +74,34 @@ model Report {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   userId       Int
-  user         User      @relation(fields: [userId], references: [id])
-  votes        Vote[]
-  radius    Float?  // Ajoutez cette ligne
+  user         User      @relation(fields: [userId], references: [id], onDelete: Restrict) // Bloque si un User est supprimé
+  votes        Vote[]    // Pas de onDelete ici
+  radius       Float?
   comments     Comment[] // Relation inverse avec Comment
-  latitude     Float     @default(0.0) 
+  latitude     Float     @default(0.0)
   longitude    Float     @default(0.0)
-  type         String    // Nouveau champ pour le type de rapport (par exemple, "sécurité", "pollution", etc.)
-  eventId      Int?      // Relation avec Event (facultatif)
-  event        Event?    @relation("EventReports", fields: [eventId], references: [id])
-  city         String?   // Ajout du champ city
-  upVotes      Int       @default(0) // Nombre de votes positifs
-  downVotes    Int       @default(0) // Nombre de votes négatifs
+  type         String
+  eventId      Int?
+  event        Event?    @relation("EventReports", fields: [eventId], references: [id], onDelete: SetNull) // Met l'eventId à null si Event supprimé
+  city         String?
+  upVotes      Int       @default(0)
+  downVotes    Int       @default(0)
 }
-
 
 model Vote {
   id           Int       @id @default(autoincrement())
   type         String
   reportId     Int
   userId       Int
-  report       Report    @relation(fields: [reportId], references: [id])
-  user         User      @relation(fields: [userId], references: [id])
-  eventId      Int?      // Relation optionnelle avec Event
-  event        Event?    @relation("EventVotes", fields: [eventId], references: [id]) // Ajoutez cette relation
-  createdAt    DateTime  @default(now()) // Ajoute cette ligne
+  report       Report    @relation(fields: [reportId], references: [id], onDelete: Cascade) // Supprime si le Report est supprimé
+  user         User      @relation(fields: [userId], references: [id], onDelete: Restrict) // Bloque si un User est supprimé
+  eventId      Int?
+  event        Event?    @relation("EventVotes", fields: [eventId], references: [id], onDelete: SetNull) // Met l'eventId à null si Event supprimé
+  createdAt    DateTime  @default(now())
 
-  @@unique([reportId, userId]) // Contrainte unique ajoutée
+  @@unique([reportId, userId]) // Contrainte unique
 }
+
 
 
 model Like {
