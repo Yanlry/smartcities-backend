@@ -1,21 +1,91 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Put,
+  Delete,
+  BadRequestException,
+  UseInterceptors,
+  UploadedFiles,
+Logger } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { S3Service } from '../services/s3/s3.service';
 
 @Controller('events')
 export class EventsController {
-  constructor(private readonly eventsService: EventsService) { }
+  constructor(
+    private readonly eventsService: EventsService,
+    private readonly s3Service: S3Service
+  ) {}
 
-  // CRÉE UN NOUVEL ÉVÉNEMENT
+  private readonly logger = new Logger(EventsController.name);
+
   @Post()
-  async create(@Body() createEventDto: CreateEventDto) {
-    // Si reportId est présent, un rayon doit être aussi fourni
-    if (createEventDto.reportId && !createEventDto.radius) {
-      throw new BadRequestException("Un rayon (radius) doit être défini si vous associez un événement à un signalement.");
+  @UseInterceptors(
+    FilesInterceptor('photos', 7, {
+      limits: { fileSize: 10 * 1024 * 1024 }, // Limite à 10 Mo
+    }),
+  )
+  async create(
+    @Body() createEventDto: CreateEventDto,
+    @UploadedFiles() photos: Express.Multer.File[],
+  ) {
+    this.logger.log('Creating event...');
+    this.logger.debug('Received Body:', createEventDto);
+    this.logger.debug('Received Files:', photos);
+
+    if (!photos || photos.length === 0) {
+      throw new BadRequestException('Aucun fichier reçu.');
     }
 
-    return this.eventsService.create(createEventDto);
+    // Filtrer les fichiers valides
+    const validPhotos = photos.filter(
+      (file) => file.buffer && file.originalname && file.mimetype,
+    );
+    if (validPhotos.length === 0) {
+      throw new BadRequestException('Aucun fichier valide trouvé.');
+    }
+    this.logger.debug('Valid Files:', validPhotos);
+
+    const photoUrls = [];
+    for (const photo of validPhotos) {
+      try {
+        this.logger.debug('Uploading valid file:', {
+          name: photo.originalname,
+          mimetype: photo.mimetype,
+          size: photo.size,
+        });
+        const url = await this.s3Service.uploadFile(photo);
+        photoUrls.push(url);
+      } catch (error) {
+        this.logger.error(
+          `Error uploading file ${photo.originalname}:`,
+          error.message,
+        );
+        throw new BadRequestException(
+          `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`,
+        );
+      }
+    }
+
+    this.logger.debug('All uploaded photo URLs:', photoUrls);
+
+    // Appel au service pour créer l'événement
+    try {
+      const event = await this.eventsService.create(createEventDto, photoUrls);
+      this.logger.log('Event created successfully:', event);
+      return event;
+    } catch (error) {
+      this.logger.error('Error creating event:', error.message);
+      throw new BadRequestException(
+        `Erreur lors de la création de l'événement : ${error.message}`,
+      );
+    }
   }
 
   // RÉCUPÈRE TOUS LES ÉVÉNEMENT
@@ -38,9 +108,14 @@ export class EventsController {
 
   // INVITE UN UTILISATEUR À UN ÉVÉNEMENT
   @Post(':id/invite')
-  async inviteUser(@Param('id') eventId: string, @Body() body: { userId: number }) {
+  async inviteUser(
+    @Param('id') eventId: string,
+    @Body() body: { userId: number }
+  ) {
     if (!body.userId) {
-      throw new BadRequestException("L'ID de l'utilisateur est requis pour l'invitation");
+      throw new BadRequestException(
+        "L'ID de l'utilisateur est requis pour l'invitation"
+      );
     }
     const id = parseInt(eventId, 10);
     return this.eventsService.inviteUser(id, body.userId);
@@ -53,7 +128,9 @@ export class EventsController {
     @Body() body: { userId: number; status: string }
   ) {
     if (!body.userId || !body.status) {
-      throw new BadRequestException("L'ID de l'utilisateur et le statut sont requis pour le RSVP");
+      throw new BadRequestException(
+        "L'ID de l'utilisateur et le statut sont requis pour le RSVP"
+      );
     }
     const id = parseInt(eventId, 10);
     return this.eventsService.rsvpToEvent(id, body.userId, body.status);

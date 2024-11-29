@@ -143,6 +143,7 @@ model Event {
   id           Int        @id @default(autoincrement())
   title        String
   description  String?
+  photos       Photo[] 
   date         DateTime
   location     String?
   createdAt    DateTime   @default(now())
@@ -155,6 +156,14 @@ model Event {
   longitude    Float     @default(0.0)
   reports      Report[]   @relation("EventReports") // Relation ajoutée entre Event et Report
   votes        Vote[]     @relation("EventVotes")   // Relation avec les votes
+}
+
+model Photo {
+  id       Int    @id @default(autoincrement())
+  url      String // URL de la photo
+  eventId  Int
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 }
 
 model Attendee {

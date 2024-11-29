@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { S3Service } from '../services/s3/s3.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
@@ -7,34 +8,58 @@ import { NotificationService } from '../notification/notification.service';
 @Injectable()
 export class EventsService {
   constructor(private prisma: PrismaService,
+    private s3Service: S3Service,
     private notificationService: NotificationService,
   ) { }
 
-  // CRÉE UN NOUVEL ÉVÉNEMENT
-  async create(data: CreateEventDto) {
-    if (data.reportId && !data.radius) {
-      throw new BadRequestException('Un rayon (radius) doit être défini si vous associez un événement à un signalement.');
+  // events.service.ts
+  async create(data: CreateEventDto, photoUrls: string[]) {
+    console.log('Photo URLs received in create service:', photoUrls);
+  
+    if (!photoUrls || photoUrls.length === 0) {
+      throw new BadRequestException('No valid photo URLs provided');
     }
-    // Créer l'événement
+  
+    // Conversion des coordonnées
+    const latitude = parseFloat(data.latitude.toString());
+    const longitude = parseFloat(data.longitude.toString());
+    const organizerId = parseInt(data.organizerId.toString(), 10);
+  
+    if (isNaN(latitude) || isNaN(longitude) || isNaN(organizerId)) {
+      throw new BadRequestException(
+        'Latitude, longitude, and organizerId must be valid numbers',
+      );
+    }
+  
+    // Création de l'événement
     const event = await this.prisma.event.create({
       data: {
         title: data.title,
         description: data.description,
-        date: data.date,
+        date: new Date(data.date),
         location: data.location,
-        organizer: { connect: { id: data.organizerId } },
+        latitude,
+        longitude,
+        organizer: { connect: { id: organizerId } },
       },
     });
-    // Si un signalement est lié à cet événement, associer l'événement au signalement
-    if (data.reportId && data.radius) {
-      await this.prisma.report.update({
-        where: { id: data.reportId },
-        data: {
-          eventId: event.id, // Lier l'événement au signalement
-          radius: data.radius, // Définir un rayon spécifique si nécessaire
-        },
+  
+    console.log('Event created in database:', event);
+  
+    // Ajout des photos à l'événement
+    if (photoUrls.length > 0) {
+      const photosData = photoUrls.map((url) => ({
+        url,
+        eventId: event.id,
+      }));
+  
+      console.log('Photos to associate with event:', photosData);
+  
+      await this.prisma.photo.createMany({
+        data: photosData,
       });
     }
+  
     return event;
   }
 
