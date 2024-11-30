@@ -19,7 +19,7 @@ export class S3Service {
       throw new Error('Invalid file: Missing buffer');
     }
   
-    console.log('Preparing to upload file:', {
+    console.log('Preparing file to upload:', {
       originalname: file.originalname,
       mimetype: file.mimetype,
       size: file.size,
