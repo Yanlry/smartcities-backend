@@ -62,7 +62,6 @@ async getMe(@Req() req: Request) {
   if (!token) {
     throw new UnauthorizedException('Token manquant');
   }
-
   return this.authService.getUserFromToken(token);
 }
 

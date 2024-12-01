@@ -28,7 +28,7 @@ async function bootstrap() {
         },
       }),
     );
-
+    
     // Gestion des exceptions globales
     app.useGlobalFilters(new HttpExceptionFilter());
 

@@ -86,6 +86,7 @@ model Report {
   city         String?
   upVotes      Int       @default(0)
   downVotes    Int       @default(0)
+  photos       Photo[]   // Relation ajoutée pour les photos
 }
 
 model Vote {
@@ -101,8 +102,6 @@ model Vote {
 
   @@unique([reportId, userId]) // Contrainte unique
 }
-
-
 
 model Like {
   id        Int      @id @default(autoincrement())
@@ -161,8 +160,10 @@ model Event {
 model Photo {
   id       Int    @id @default(autoincrement())
   url      String // URL de la photo
-  eventId  Int
-  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId  Int?
+  event    Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  reportId Int?      // Peut être lié à un Report
+  report   Report?   @relation(fields: [reportId], references: [id], onDelete: Cascade) // Cascade pour supprimer les photos si le Report est supprimé
   createdAt DateTime @default(now())
 }
 

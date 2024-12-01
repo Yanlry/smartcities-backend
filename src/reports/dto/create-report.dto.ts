@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsInt } from 'class-validator';
+import { IsString, IsNotEmpty, IsInt, IsOptional, IsArray } from 'class-validator';
 
 export class CreateReportDto {
   @IsString()
@@ -12,4 +12,9 @@ export class CreateReportDto {
   @IsInt()
   @IsNotEmpty()
   userId: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true }) // Chaque élément du tableau doit être une chaîne
+  photoUrls?: string[]; // Optionnel, car les fichiers peuvent ne pas être envoyés
 }

@@ -1,18 +1,67 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Logger, Put, Delete, Param, Body, Query, BadRequestException, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { ReportService } from './reports.service';
 import { VoteOnReportDto } from './dto/vote-on-report.dto';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { S3Service } from '../services/s3/s3.service';
+
+
 @Controller('reports')
 export class ReportController {
-  constructor(private readonly reportService: ReportService) {}
+  constructor(
+    private readonly reportService: ReportService,
+    private readonly s3Service: S3Service
+  ) {}
 
-  // CRÉE UN NOUVEAU SIGNAL
+  private readonly logger = new Logger(ReportController.name);
+
   @Post()
-  async createReport(@Body() reportData: any) {
-    // Vérifier que les données nécessaires sont présentes
+  @UseInterceptors(
+    FilesInterceptor('photos', 7, {
+      limits: { fileSize: 10 * 1024 * 1024 }, // Limite à 10 Mo
+    }),
+  )
+  async createReport(
+    @Body() reportData: any,
+    @UploadedFiles() photos: Express.Multer.File[],
+  ) {
+    console.log('Données reçues pour le signalement :', reportData);
+  
     if (!reportData.latitude || !reportData.longitude) {
       throw new BadRequestException('La latitude et la longitude sont nécessaires pour créer un signalement');
     }
-    return this.reportService.createReport(reportData);
+  
+    // Filtrer les fichiers valides
+    const validPhotos = photos?.filter(
+      (file) => file.buffer && file.originalname && file.mimetype,
+    ) || [];
+    if (validPhotos.length === 0) {
+      throw new BadRequestException('Aucun fichier valide trouvé.');
+    }
+  
+    console.log('Fichiers valides pour l’upload :', validPhotos);
+  
+    const photoUrls = [];
+    for (const photo of validPhotos) {
+      try {
+        console.log('Uploading photo:', {
+          name: photo.originalname,
+          mimetype: photo.mimetype,
+          size: photo.size,
+        });
+        const url = await this.s3Service.uploadFile(photo);
+        photoUrls.push(url);
+      } catch (error) {
+        console.error(`Error uploading file ${photo.originalname}:`, error.message);
+        throw new BadRequestException(
+          `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`,
+        );
+      }
+    }
+  
+    console.log('URLs des photos uploadées :', photoUrls);
+  
+    // Appel au service pour créer le signalement
+    return this.reportService.createReport(reportData, photoUrls);
   }
 
   // LISTE LES SIGNALS AVEC FILTRES OPTIONNELS
@@ -33,24 +82,24 @@ export class ReportController {
     // Appel du service avec les paramètres validés
     return this.reportService.listReports({ latitude, longitude, radiusKm, ...otherFilters });
   }
+
   @Get('/categories')
   async listCategories() {
     return this.reportService.listCategories();
   }
+
   @Get(':id')
   async getReportById(
     @Param('id') id: number,
     @Query('latitude') latitude?: string,
     @Query('longitude') longitude?: string
   ) {
-    if (!latitude || !longitude) {
-      throw new BadRequestException('Latitude and longitude are required');
-    }
-    return this.reportService.getReportById(id, Number(latitude), Number(longitude));
+    const lat = latitude ? Number(latitude) : undefined;
+    const lon = longitude ? Number(longitude) : undefined;
+  
+    return this.reportService.getReportById(id, lat, lon);
   }
 
-
-  
   // MET À JOUR UN SIGNAL
   @Put(':id')
   async updateReport(@Param('id') id: string, @Body() updateData: any) {
