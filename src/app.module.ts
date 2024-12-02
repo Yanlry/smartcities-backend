@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { AppConfigService } from './config/config.service';
+import { AppConfigController } from './config/config.controller';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { ReportModule } from './reports/reports.module';
@@ -12,7 +15,23 @@ import { NotificationModule } from './notification/notification.module';
 import { StatsModule } from './stats/stats.module';
 
 @Module({
-  imports: [AuthModule, UserModule, ReportModule, PostsModule, GroupsModule, EventsModule, MessagesModule, MapModule, NotificationModule, StatsModule],
-  providers: [PrismaService],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    AuthModule,
+    UserModule,
+    ReportModule,
+    PostsModule,
+    GroupsModule,
+    EventsModule,
+    MessagesModule,
+    MapModule,
+    NotificationModule,
+    StatsModule,
+  ],
+  providers: [PrismaService, AppConfigService],
+  controllers: [AppConfigController], // Ajoute le contrôleur
 })
 export class AppModule {}

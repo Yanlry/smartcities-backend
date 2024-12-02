@@ -50,7 +50,6 @@ async function bootstrap() {
     app.enableCors({
       origin: [
         'http://localhost:3001', // Domaine local pour le développement
-        'http://192.168.1.100:3000/', // Domaine déployé
       ],
       methods: 'GET,POST,PUT,DELETE',
       credentials: true, // Permet d'envoyer des cookies si nécessaire
