@@ -2,14 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { last } from 'rxjs';
+import { S3Service } from 'src/services/s3/s3.service';
 
 @Injectable()
 export class UserService {
   constructor(private prisma: PrismaService,
     private readonly notificationService: NotificationService,
+    private readonly s3Service: S3Service,
   ) { }
 
-  // RÉCUPÈRE LE PROFIL COMPLET D'UN UTILISATEUR PAR SON ID
   async getUserById(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -20,17 +21,73 @@ export class UserService {
         lastName: true,
         firstName: true,
         createdAt: true,
-        reports: true, // RÉCUPÈRE LE NOMBRE DE SIGNALEMENTS
         trustRate: true,
-        latitude: true,   // Inclure latitude
-        longitude: true, 
+        latitude: true,
+        longitude: true,
+        photos: {
+          where: { isProfile: true },
+          select: {
+            id: true,
+            url: true,
+          },
+        },
       },
     });
-
+  
     if (!user) throw new NotFoundException('Utilisateur non trouvé');
-    return user;
+  
+    const profilePhoto = user.photos.length > 0 ? user.photos[0] : null;
+  
+    return {
+      ...user,
+      profilePhoto,
+    };
   }
-
+  
+  
+  async updateProfilePhoto(userId: number, newProfilePhoto: Express.Multer.File): Promise<string> {
+    // Récupérer l'ancienne photo de profil
+    const oldProfilePhoto = await this.prisma.photo.findFirst({
+      where: { userId, isProfile: true },
+    });
+  
+    // Supprimer l'ancienne photo de profil de S3 si elle existe
+    if (oldProfilePhoto) {
+      try {
+        await this.s3Service.deleteFile(oldProfilePhoto.url);
+        console.log('Ancienne photo de profil supprimée :', oldProfilePhoto.url);
+      } catch (error) {
+        console.error('Erreur lors de la suppression de l\'ancienne photo :', error.message);
+        // On continue le processus même si la suppression échoue
+      }
+    } else {
+      console.log('Aucune ancienne photo à supprimer');
+    }
+  
+    // Upload de la nouvelle photo
+    const newProfilePhotoUrl = await this.s3Service.uploadFile(newProfilePhoto);
+    console.log('Nouvelle photo uploadée :', newProfilePhotoUrl);
+  
+    // Mettre à jour la base de données
+    await this.prisma.photo.updateMany({
+      where: { userId },
+      data: { isProfile: false },
+    });
+  
+    const createdPhoto = await this.prisma.photo.create({
+      data: {
+        url: newProfilePhotoUrl,
+        isProfile: true,
+        userId,
+      },
+    });
+  
+    return createdPhoto.url;
+  }
+  
+  
+  
+  
   // MET À JOUR LE PROFIL D'UN UTILISATEUR
   async updateUser(userId: number, data: any) {
     const updatedUser = await this.prisma.user.update({
@@ -40,7 +97,6 @@ export class UserService {
     return updatedUser;
   }
   
-
   // MET A JOUR LE TAUX DE CONFIANCE DE L'UTILISATEUR
   async updateUserTrustRate(userId: number) {
     const votes = await this.prisma.vote.findMany({

@@ -13,32 +13,89 @@ export class S3Service {
     });
   }
 
-  async uploadFile(file: Express.Multer.File): Promise<string> {
-    if (!file || !file.buffer) {
-      console.error('Invalid file:', file);
-      throw new Error('Invalid file: Missing buffer');
+async uploadFile(file: Express.Multer.File): Promise<string> {
+  if (!file || !file.buffer) {
+    throw new Error('Invalid file: Missing buffer.');
+  }
+
+  const params: AWS.S3.PutObjectRequest = {
+    Bucket: process.env.AWS_BUCKET_NAME,
+    Key: `${Date.now()}-${file.originalname}`, // Unique file name
+    Body: file.buffer,
+    ContentType: file.mimetype,
+  };
+
+  try {
+    const uploadResult = await this.s3.upload(params).promise();
+    console.log('File uploaded successfully:', uploadResult);
+    return uploadResult.Location; // URL of the uploaded file
+  } catch (error) {
+    console.error('Error uploading file to S3:', error);
+    throw new Error(`Failed to upload file to S3: ${error.message}`);
+  }
+}
+
+async updateFile(oldFileUrl: string, newFile: Express.Multer.File): Promise<string> {
+  if (!newFile || !newFile.buffer) {
+    throw new Error('Invalid file: Missing buffer.');
+  }
+
+  const bucketName = process.env.AWS_BUCKET_NAME;
+  const oldFileKey = oldFileUrl.split(`${bucketName}/`)[1]; // Extract the key from the old URL
+
+  if (!oldFileKey) {
+    throw new Error('Could not extract file key from URL.');
+  }
+
+  const params: AWS.S3.PutObjectRequest = {
+    Bucket: bucketName,
+    Key: oldFileKey, // Reuse the key to replace the file
+    Body: newFile.buffer,
+    ContentType: newFile.mimetype,
+  };
+
+  try {
+    const uploadResult = await this.s3.upload(params).promise();
+    console.log('File updated successfully:', uploadResult);
+    return uploadResult.Location;
+  } catch (error) {
+    console.error('Error updating file in S3:', error);
+    throw new Error(`Failed to update file in S3: ${error.message}`);
+  }
+}
+
+
+  /**
+   * Delete a file from S3.
+   * @param fileUrl The URL of the file to delete.
+   * @returns A promise that resolves when the file is deleted.
+   */
+  async deleteFile(fileUrl: string): Promise<void> {
+    if (!fileUrl) {
+      throw new Error('Invalid file URL.');
     }
   
-    console.log('Preparing file to upload:', {
-      originalname: file.originalname,
-      mimetype: file.mimetype,
-      size: file.size,
-    });
+    const bucketName = process.env.AWS_BUCKET_NAME;
+    const fileKey = fileUrl.includes(bucketName)
+      ? fileUrl.split(`${bucketName}/`)[1]
+      : null;
   
-    const params = {
-      Bucket: process.env.AWS_BUCKET_NAME,
-      Key: `${Date.now()}-${file.originalname}`, // Nom unique basé sur l'heure actuelle
-      Body: file.buffer,
-      ContentType: file.mimetype, // Type MIME du fichier
+    if (!fileKey) {
+      throw new Error('Could not extract file key from URL.');
+    }
+  
+    const params: AWS.S3.DeleteObjectRequest = {
+      Bucket: bucketName,
+      Key: fileKey,
     };
   
     try {
-      const uploadResult = await this.s3.upload(params).promise();
-      console.log('Uploaded File URL:', uploadResult.Location);
-      return uploadResult.Location;
+      await this.s3.deleteObject(params).promise();
+      console.log('File deleted successfully:', fileKey);
     } catch (error) {
-      console.error('Error uploading to S3:', error);
-      throw new Error(`Failed to upload file to S3: ${error.message}`);
+      console.error('Error deleting file from S3:', error);
+      throw new Error(`Failed to delete file from S3: ${error.message}`);
     }
   }
+  
 }

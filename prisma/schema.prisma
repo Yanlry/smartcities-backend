@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,47 +8,49 @@ datasource db {
 }
 
 model User {
-  id            Int       @id @default(autoincrement())
-  email         String    @unique
-  password      String
-  firstName     String  @default("Unknown")  
-  lastName      String  @default("Unknown")  
-  username      String? @unique
-  following     UserFollow[] @relation("FollowingRelation")
-  followers     UserFollow[] @relation("FollowerRelation")
-  createdAt     DateTime  @default(now())
-  refreshToken  String?  
-  resetToken    String?  
-  resetTokenExpiry DateTime? 
-  trustRate     Float?    // Taux de confiance
-  reports       Report[]
-  votes         Vote[] // Relation avec Vote
-  comments      Comment[] // Relation avec Comment
-  posts         Post[]  // Relation avec Post
-  notifications Notification[] // Relation avec Notification
-  likes         Like[] 
-  groups        Group[]  @relation("GroupMembers")       // Groupes auxquels appartient l'utilisateur
-  ownedGroups   Group[]  @relation("GroupOwnership")     // Groupes possédés par l'utilisateur
-  organizedEvents Event[] @relation("UserEvents") // Événements organisés par l'utilisateur
-  invites         Invite[] // Invitations reçues par l'utilisateur
-  attendedEvents  Attendee[] // Événements auxquels l'utilisateur participe
-  conversations   Conversation[]  @relation("UserConversations") // Liens avec les conversations
-  messages        Message[]       @relation("UserMessages") // Liens avec les messages envoyés
-  isSubscribed      Boolean  @default(false) // Nouveau champ pour indiquer l'abonnement
-  isMunicipality Boolean  @default(false)
-  notificationSubscriptions NotificationSubscription[] // Relation vers les abonnements de notification
-  latitude        Float?   // Ajout de la latitude
-  longitude       Float?   // Ajout de la longitude
+  id                        Int                        @id @default(autoincrement())
+  email                     String                     @unique
+  password                  String
+  createdAt                 DateTime                   @default(now())
+  refreshToken              String?
+  resetToken                String?
+  resetTokenExpiry          DateTime?
+  trustRate                 Float?
+  isSubscribed              Boolean                    @default(false)
+  isMunicipality            Boolean                    @default(false)
+  latitude                  Float?
+  longitude                 Float?
+  firstName                 String                     @default("Unknown")
+  lastName                  String                     @default("Unknown")
+  username                  String?                    @unique
+  attendedEvents            Attendee[]
+  comments                  Comment[]
+  organizedEvents           Event[]                    @relation("UserEvents")
+  ownedGroups               Group[]                    @relation("GroupOwnership")
+  invites                   Invite[]
+  likes                     Like[]
+  messages                  Message[]                  @relation("UserMessages")
+  notifications             Notification[]
+  notificationSubscriptions NotificationSubscription[]
+  photos                    Photo[]
+  posts                     Post[]
+  reports                   Report[]
+  following                 UserFollow[]               @relation("FollowingRelation")
+  followers                 UserFollow[]               @relation("FollowerRelation")
+  votes                     Vote[]
+  groups                    Group[]                    @relation("GroupMembers")
+  conversations             Conversation[]             @relation("UserConversations")
 }
 
 model UserFollow {
-  id           Int    @id @default(autoincrement())
-  followerId   Int
-  followingId  Int
-  follower     User   @relation("FollowingRelation", fields: [followerId], references: [id])
-  following    User   @relation("FollowerRelation", fields: [followingId], references: [id])
-  createdAt    DateTime @default(now())
-  @@unique([followerId, followingId]) // Clé unique pour éviter les doublons
+  id          Int      @id @default(autoincrement())
+  followerId  Int
+  followingId Int
+  createdAt   DateTime @default(now())
+  follower    User     @relation("FollowingRelation", fields: [followerId], references: [id])
+  following   User     @relation("FollowerRelation", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId])
 }
 
 model Group {
@@ -62,175 +58,173 @@ model Group {
   name        String
   description String?
   createdAt   DateTime @default(now())
-  members     User[]   @relation("GroupMembers")    // Membres du groupe
   ownerId     Int
-  owner       User     @relation("GroupOwnership", fields: [ownerId], references: [id]) // Propriétaire du groupe
+  owner       User     @relation("GroupOwnership", fields: [ownerId], references: [id])
+  members     User[]   @relation("GroupMembers")
 }
 
 model Report {
-  id           Int       @id @default(autoincrement())
-  title        String
-  description  String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  userId       Int
-  user         User      @relation(fields: [userId], references: [id], onDelete: Restrict) // Bloque si un User est supprimé
-  votes        Vote[]    // Pas de onDelete ici
-  radius       Float?
-  comments     Comment[] // Relation inverse avec Comment
-  latitude     Float     @default(0.0)
-  longitude    Float     @default(0.0)
-  type         String
-  eventId      Int?
-  event        Event?    @relation("EventReports", fields: [eventId], references: [id], onDelete: SetNull) // Met l'eventId à null si Event supprimé
-  city         String?
-  upVotes      Int       @default(0)
-  downVotes    Int       @default(0)
-  photos       Photo[]   // Relation ajoutée pour les photos
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  userId      Int
+  latitude    Float     @default(0.0)
+  longitude   Float     @default(0.0)
+  type        String
+  eventId     Int?
+  radius      Float?
+  city        String?
+  downVotes   Int       @default(0)
+  upVotes     Int       @default(0)
+  comments    Comment[]
+  photos      Photo[]
+  event       Event?    @relation("EventReports", fields: [eventId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+  votes       Vote[]
 }
 
 model Vote {
-  id           Int       @id @default(autoincrement())
-  type         String
-  reportId     Int
-  userId       Int
-  report       Report    @relation(fields: [reportId], references: [id], onDelete: Cascade) // Supprime si le Report est supprimé
-  user         User      @relation(fields: [userId], references: [id], onDelete: Restrict) // Bloque si un User est supprimé
-  eventId      Int?
-  event        Event?    @relation("EventVotes", fields: [eventId], references: [id], onDelete: SetNull) // Met l'eventId à null si Event supprimé
-  createdAt    DateTime  @default(now())
+  id        Int      @id @default(autoincrement())
+  type      String
+  reportId  Int
+  userId    Int
+  createdAt DateTime @default(now())
+  eventId   Int?
+  event     Event?   @relation("EventVotes", fields: [eventId], references: [id])
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
 
-  @@unique([reportId, userId]) // Contrainte unique
+  @@unique([reportId, userId])
 }
 
 model Like {
   id        Int      @id @default(autoincrement())
   postId    Int
   userId    Int
+  createdAt DateTime @default(now())
   post      Post     @relation(fields: [postId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
 }
 
 model Comment {
   id        Int      @id @default(autoincrement())
   text      String
-  reportId  Int?
-  postId    Int?
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  report    Report?  @relation(fields: [reportId], references: [id])
-  post      Post?    @relation(fields: [postId], references: [id])
   createdAt DateTime @default(now())
+  reportId  Int?
+  userId    Int
+  postId    Int?
+  post      Post?    @relation(fields: [postId], references: [id])
+  report    Report?  @relation(fields: [reportId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model Post {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   title     String
   content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   authorId  Int
-  author    User     @relation(fields: [authorId], references: [id])
-  likes     Like[] 
-  latitude  Float?   // Latitude pour la localisation sur la carte
-  longitude Float?   // Longitude pour la localisation sur la carte
-  comments  Comment[] // Relation automatique entre 'Post' et 'Comment'
+  latitude  Float?
+  longitude Float?
+  comments  Comment[]
+  likes     Like[]
+  author    User      @relation(fields: [authorId], references: [id])
 }
 
 model Event {
-  id           Int        @id @default(autoincrement())
-  title        String
-  description  String?
-  photos       Photo[] 
-  date         DateTime
-  location     String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  attendees    Attendee[] // Participants à l'événement
-  organizerId  Int        // Propriétaire de l'événement (organisateur)
-  organizer    User       @relation("UserEvents", fields: [organizerId], references: [id]) // Relation avec User
-  invites      Invite[]   // Invitations envoyées pour cet événement
-  latitude     Float     @default(0.0) 
-  longitude    Float     @default(0.0)
-  reports      Report[]   @relation("EventReports") // Relation ajoutée entre Event et Report
-  votes        Vote[]     @relation("EventVotes")   // Relation avec les votes
+  id          Int        @id @default(autoincrement())
+  title       String
+  description String?
+  date        DateTime
+  location    String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  organizerId Int
+  latitude    Float      @default(0.0)
+  longitude   Float      @default(0.0)
+  attendees   Attendee[]
+  organizer   User       @relation("UserEvents", fields: [organizerId], references: [id])
+  invites     Invite[]
+  photos      Photo[]
+  reports     Report[]   @relation("EventReports")
+  votes       Vote[]     @relation("EventVotes")
 }
 
 model Photo {
-  id       Int    @id @default(autoincrement())
-  url      String // URL de la photo
-  eventId  Int?
-  event    Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  reportId Int?      // Peut être lié à un Report
-  report   Report?   @relation(fields: [reportId], references: [id], onDelete: Cascade) // Cascade pour supprimer les photos si le Report est supprimé
+  id        Int      @id @default(autoincrement())
+  url       String   @unique
+  isProfile  Boolean @default(false) // Indique si c'est une photo de profil
+  eventId   Int?
   createdAt DateTime @default(now())
+  reportId  Int?
+  userId    Int?
+  event     Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  report    Report?  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Attendee {
-  id       Int      @id @default(autoincrement())
-  user     User     @relation(fields: [userId], references: [id])
-  event    Event    @relation(fields: [eventId], references: [id])
-  userId   Int
-  eventId  Int
-  status   String   // Peut indiquer "accepted", "declined", ou "pending"
+  id      Int    @id @default(autoincrement())
+  userId  Int
+  eventId Int
+  status  String
+  event   Event  @relation(fields: [eventId], references: [id])
+  user    User   @relation(fields: [userId], references: [id])
 }
 
 model Invite {
-  id        Int    @id @default(autoincrement())
-  eventId   Int
-  event     Event  @relation(fields: [eventId], references: [id])
-  userId    Int
-  user      User   @relation(fields: [userId], references: [id])
-  status    String // "pending", "accepted", "declined"
-  sentAt    DateTime @default(now())
-  @@unique([eventId, userId]) // Clé unique composée
+  id      Int      @id @default(autoincrement())
+  eventId Int
+  userId  Int
+  status  String
+  sentAt  DateTime @default(now())
+  event   Event    @relation(fields: [eventId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, userId])
 }
 
 model Conversation {
   id             Int       @id @default(autoincrement())
-  participants   User[]    @relation("UserConversations") // Liste des participants dans la conversation
-  messages       Message[] // Liste des messages dans la conversation
-  isMunicipality  Boolean   @default(false) // Champ pour identifier la conversation avec la mairie
-  createdAt    DateTime @default(now())
+  createdAt      DateTime  @default(now())
+  isMunicipality Boolean   @default(false)
+  messages       Message[]
+  participants   User[]    @relation("UserConversations")
 }
 
 model Message {
-  id             Int       @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   content        String
-  createdAt      DateTime  @default(now())
-  isRead         Boolean   @default(false) // Ajout du champ pour l'état de lecture
+  createdAt      DateTime     @default(now())
+  isRead         Boolean      @default(false)
   senderId       Int
-  sender         User      @relation("UserMessages", fields: [senderId], references: [id]) // Expéditeur du message
   conversationId Int
-  conversation   Conversation @relation(fields: [conversationId], references: [id]) // Conversation à laquelle le message appartient
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  sender         User         @relation("UserMessages", fields: [senderId], references: [id])
 }
 
 model Notification {
   id        Int      @id @default(autoincrement())
-  userId    Int
   message   String
-  type      String   // Type de notification (ex: 'vote', 'commentaire', etc.)
-  relatedId Int      // ID de l'élément concerné
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+  userId    Int
+  relatedId Int
+  type      String
   updatedAt DateTime @updatedAt
-
   user      User     @relation(fields: [userId], references: [id])
 }
 
-
 model NotificationSubscription {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  city       String?  // Nom de la ville ou autre identifiant géographique
-  latitude   Float?   // Latitude du périmètre d'abonnement
-  longitude  Float?   // Longitude du périmètre d'abonnement
-  radius     Float?   // Rayon du périmètre en km
-  user       User     @relation(fields: [userId], references: [id])
-  createdAt  DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  city      String?
+  latitude  Float?
+  longitude Float?
+  radius    Float?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
-
-
-
-

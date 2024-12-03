@@ -38,16 +38,10 @@ export class ReportController {
       throw new BadRequestException('Aucun fichier valide trouvé.');
     }
   
-    console.log('Fichiers valides pour l’upload :', validPhotos);
   
     const photoUrls = [];
     for (const photo of validPhotos) {
       try {
-        console.log('Uploading photo:', {
-          name: photo.originalname,
-          mimetype: photo.mimetype,
-          size: photo.size,
-        });
         const url = await this.s3Service.uploadFile(photo);
         photoUrls.push(url);
       } catch (error) {
