@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { last } from 'rxjs';
 import { S3Service } from 'src/services/s3/s3.service';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UserService {
@@ -87,13 +88,16 @@ export class UserService {
   
   
   
+  async updateUser(userId: number, data: UpdateUserDto) {
+    // Filtrer les champs invalides (si des champs non autorisés sont envoyés)
+    const { email, username, firstName, lastName } = data;
   
-  // MET À JOUR LE PROFIL D'UN UTILISATEUR
-  async updateUser(userId: number, data: any) {
+    // Valider les champs si nécessaire
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
-      data,
+      data: { email, username, firstName, lastName },
     });
+  
     return updatedUser;
   }
   

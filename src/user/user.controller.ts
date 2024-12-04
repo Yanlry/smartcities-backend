@@ -28,24 +28,24 @@ export class UserController {
     private readonly s3Service: S3Service
   ) {}
 
-   // RÉCUPÈRE LE PROFIL D'UN UTILISATEUR PAR SON ID
-   @Get(':id')
-   async getUserById(@Param('id') id: string) {
-     const userId = parseInt(id, 10); // Convertit l'ID de chaîne en nombre
-     if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
-     return this.userService.getUserById(userId);
-   }
+  // RÉCUPÈRE LE PROFIL D'UN UTILISATEUR PAR SON ID
+  @Get(':id')
+  async getUserById(@Param('id') id: string) {
+    const userId = parseInt(id, 10); // Convertit l'ID de chaîne en nombre
+    if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
+    return this.userService.getUserById(userId);
+  }
 
   @Post(':userId/profile-image')
   @UseInterceptors(
     FilesInterceptor('profileImage', 1, {
       limits: { fileSize: 10 * 1024 * 1024 }, // Limite de 10 Mo
-    }),
+    })
   )
   async updateProfileImage(
     @Param('userId') userId: number,
     @UploadedFiles() files: Express.Multer.File[],
-    @Request() req: Request, // Pour inspecter les en-têtes et le corps brut si nécessaire
+    @Request() req: Request // Pour inspecter les en-têtes et le corps brut si nécessaire
   ) {
     console.log('Requête reçue - Headers :', req.headers);
     console.log('Requête reçue - Content-Type :', req.headers['content-type']);
@@ -60,16 +60,26 @@ export class UserController {
 
     try {
       const newPhoto = files[0];
-      const updatedPhotoUrl = await this.userService.updateProfilePhoto(userId, newPhoto);
-      console.log('Mise à jour réussie - URL de la nouvelle photo :', updatedPhotoUrl);
-      return { message: 'Photo de profil mise à jour avec succès', url: updatedPhotoUrl };
+      const updatedPhotoUrl = await this.userService.updateProfilePhoto(
+        userId,
+        newPhoto
+      );
+      console.log(
+        'Mise à jour réussie - URL de la nouvelle photo :',
+        updatedPhotoUrl
+      );
+      return {
+        message: 'Photo de profil mise à jour avec succès',
+        url: updatedPhotoUrl,
+      };
     } catch (error) {
-      console.error('Erreur lors de la mise à jour de la photo de profil :', error);
+      console.error(
+        'Erreur lors de la mise à jour de la photo de profil :',
+        error
+      );
       throw new HttpException('Erreur interne', 500);
     }
   }
-   
-  
 
   // RECUPERER LE NOMBRE DE FOLLOWER D'UN UTILISATEUR
   @Get(':id')
@@ -95,7 +105,6 @@ export class UserController {
     return this.userService.unfollowUser(+userId, followerId);
   }
 
- 
   // MET À JOUR LES INFORMATIONS DE PROFIL D'UN UTILISATEUR ET SON TRUST RATE
   @Put(':id')
   async updateUser(
