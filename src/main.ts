@@ -24,7 +24,7 @@ async function bootstrap() {
         forbidNonWhitelisted: true, // Bloque les champs non autorisés
         transform: true, // Convertit automatiquement les types
         transformOptions: {
-          enableImplicitConversion: true, // Permet les conversions implicites
+        enableImplicitConversion: true, // Permet les conversions implicites
         },
       }),
     );

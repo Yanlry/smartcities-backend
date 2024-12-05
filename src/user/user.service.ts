@@ -4,13 +4,47 @@ import { NotificationService } from '../notification/notification.service';
 import { last } from 'rxjs';
 import { S3Service } from 'src/services/s3/s3.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService,
+  constructor(
+    private prisma: PrismaService,
     private readonly notificationService: NotificationService,
-    private readonly s3Service: S3Service,
-  ) { }
+    private readonly s3Service: S3Service
+  ) {}
+
+  async listTop10Smarter() {
+    return await this.prisma.user.findMany({
+      take: 10, // Limiter à 10 utilisateurs
+      orderBy: { createdAt: 'desc' }, // Par exemple, trier par date de création
+      select: {
+        id: true,
+        username: true,
+        photos: {
+          where: { isProfile: true },
+          select: { url: true },
+        },
+      },
+    });
+  }
+  
+  // LISTE LES UTILISATEURS AVEC POSSIBILITÉ DE FILTRE
+  async listUsers(filter: any) {
+    const users = await this.prisma.user.findMany({
+      where: filter,
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        lastName: true,
+        firstName: true,
+        createdAt: true,
+        reports: true,
+      },
+    });
+    return users;
+  }
 
   async getUserById(userId: number) {
     const user = await this.prisma.user.findUnique({
@@ -32,49 +66,95 @@ export class UserService {
             url: true,
           },
         },
+        followers: {
+          select: {
+            follower: {
+              select: {
+                id: true,
+                username: true,
+                photos: {
+                  where: { isProfile: true },
+                  select: { url: true },
+                },
+              },
+            },
+          },
+        },
+        following: {
+          select: {
+            following: {
+              select: {
+                id: true,
+                username: true,
+                photos: {
+                  where: { isProfile: true },
+                  select: { url: true },
+                },
+              },
+            },
+          },
+        },
       },
     });
   
-    if (!user) throw new NotFoundException('Utilisateur non trouvé');
-  
-    const profilePhoto = user.photos.length > 0 ? user.photos[0] : null;
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
   
     return {
       ...user,
-      profilePhoto,
+      profilePhoto: user.photos.length > 0 ? user.photos[0] : null,
+      followers: user.followers.map((f) => ({
+        id: f.follower.id,
+        username: f.follower.username,
+        profilePhoto: f.follower.photos[0]?.url || null,
+      })),
+      following: user.following.map((f) => ({
+        id: f.following.id,
+        username: f.following.username,
+        profilePhoto: f.following.photos[0]?.url || null,
+      })),
     };
   }
-  
-  
-  async updateProfilePhoto(userId: number, newProfilePhoto: Express.Multer.File): Promise<string> {
+
+  async updateProfilePhoto(
+    userId: number,
+    newProfilePhoto: Express.Multer.File
+  ): Promise<string> {
     // Récupérer l'ancienne photo de profil
     const oldProfilePhoto = await this.prisma.photo.findFirst({
       where: { userId, isProfile: true },
     });
-  
+
     // Supprimer l'ancienne photo de profil de S3 si elle existe
     if (oldProfilePhoto) {
       try {
         await this.s3Service.deleteFile(oldProfilePhoto.url);
-        console.log('Ancienne photo de profil supprimée :', oldProfilePhoto.url);
+        console.log(
+          'Ancienne photo de profil supprimée :',
+          oldProfilePhoto.url
+        );
       } catch (error) {
-        console.error('Erreur lors de la suppression de l\'ancienne photo :', error.message);
+        console.error(
+          "Erreur lors de la suppression de l'ancienne photo :",
+          error.message
+        );
         // On continue le processus même si la suppression échoue
       }
     } else {
       console.log('Aucune ancienne photo à supprimer');
     }
-  
+
     // Upload de la nouvelle photo
     const newProfilePhotoUrl = await this.s3Service.uploadFile(newProfilePhoto);
     console.log('Nouvelle photo uploadée :', newProfilePhotoUrl);
-  
+
     // Mettre à jour la base de données
     await this.prisma.photo.updateMany({
       where: { userId },
       data: { isProfile: false },
     });
-  
+
     const createdPhoto = await this.prisma.photo.create({
       data: {
         url: newProfilePhotoUrl,
@@ -82,25 +162,59 @@ export class UserService {
         userId,
       },
     });
-  
+
     return createdPhoto.url;
   }
-  
-  
-  
+
   async updateUser(userId: number, data: UpdateUserDto) {
     // Filtrer les champs invalides (si des champs non autorisés sont envoyés)
     const { email, username, firstName, lastName } = data;
-  
+
     // Valider les champs si nécessaire
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: { email, username, firstName, lastName },
     });
-  
+
     return updatedUser;
   }
-  
+
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string
+  ) {
+    // Récupérer l'utilisateur existant
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!existingUser) {
+      throw new Error('Utilisateur introuvable.');
+    }
+
+    // Vérifier le mot de passe actuel
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      existingUser.password
+    );
+    if (!isPasswordValid) {
+      throw new Error('Mot de passe actuel incorrect.');
+    }
+
+    // Hacher le nouveau mot de passe
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Mettre à jour le mot de passe dans la base de données
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return { message: 'Mot de passe mis à jour avec succès.' };
+  }
+
   // MET A JOUR LE TAUX DE CONFIANCE DE L'UTILISATEUR
   async updateUserTrustRate(userId: number) {
     const votes = await this.prisma.vote.findMany({
@@ -111,7 +225,7 @@ export class UserService {
     let validVotes = 0;
 
     // Calcul du trustRate basé sur les votes positifs
-    votes.forEach(vote => {
+    votes.forEach((vote) => {
       if (vote.type === 'up') {
         trustRate += 1;
         validVotes += 1;
@@ -129,42 +243,25 @@ export class UserService {
     });
   }
 
-  // LISTE LES UTILISATEURS AVEC POSSIBILITÉ DE FILTRE
-  async listUsers(filter: any) {
-    const users = await this.prisma.user.findMany({
-      where: filter,
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        lastName: true,
-        firstName: true,
-        createdAt: true,
-        reports: true,
-      },
-    });
-    return users;
-  }
-
   // RÉCUPÈRE LES STATISTIQUES D'UN UTILISATEUR (INCLUANT LE TRUST RATE)
   async getUserStats(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         reports: true,
-        trustRate: true,  // Inclure le trustRate dans les statistiques
+        trustRate: true, // Inclure le trustRate dans les statistiques
       },
     });
 
     if (!user) throw new NotFoundException('Utilisateur non trouvé');
 
     return {
-      numberOfReports: user.reports.length,  // Compte les signalements
-      trustRate: user.trustRate,  // Récupère le trustRate
+      numberOfReports: user.reports.length, // Compte les signalements
+      trustRate: user.trustRate, // Récupère le trustRate
     };
   }
 
-  // S'ABONNER A UN UTILISATEUR 
+  // S'ABONNER A UN UTILISATEUR
   async followUser(userId: number, followerId: number) {
     const follow = await this.prisma.userFollow.create({
       data: {
@@ -173,14 +270,16 @@ export class UserService {
       },
     });
     // Créer une notification pour informer l'utilisateur qu'il a un nouveau follower
-    const follower = await this.prisma.user.findUnique({ where: { id: followerId } });
-    
+    const follower = await this.prisma.user.findUnique({
+      where: { id: followerId },
+    });
+
     // Ajoutez ici les valeurs des arguments `type` et `relatedId`
     await this.notificationService.createNotification(
-      userId, 
+      userId,
       `${follower.username} vous suit maintenant.`,
-      "FOLLOW",           // Exemple de valeur pour le type
-      follow.id           // Par exemple, l'ID du suivi
+      'FOLLOW', // Exemple de valeur pour le type
+      follow.id // Par exemple, l'ID du suivi
     );
     return follow;
   }
@@ -222,6 +321,4 @@ export class UserService {
     await this.prisma.user.delete({ where: { id: userId } });
     return { message: 'Utilisateur supprimé avec succès' };
   }
-
-  
 }

@@ -20,6 +20,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { S3Service } from 'src/services/s3/s3.service';
 import { HttpException } from '@nestjs/common/exceptions/http.exception';
 import { Request } from '@nestjs/common';
+import { ChangePasswordDto } from './dto/changePassword.dto';
 
 @Controller('users')
 export class UserController {
@@ -27,6 +28,26 @@ export class UserController {
     private readonly userService: UserService,
     private readonly s3Service: S3Service
   ) {}
+
+  // LISTE LES UTILISATEURS AVEC DES FILTRES OPTIONNELS
+  @Get()
+  async listUsers(@Query() filters: any) {
+    return this.userService.listUsers(filters);
+  }
+
+  // Récupère les 10 utilisateurs les plus récents avec leur photo de profil
+  @Get('top10')
+  async getTop10Smarter() {
+    try {
+      const users = await this.userService.listTop10Smarter(); // Appel au service
+      return users; // Retourne directement les utilisateurs
+    } catch (error) {
+      throw new HttpException(
+        'Erreur lors de la récupération des utilisateurs',
+        500
+      );
+    }
+  }
 
   // RÉCUPÈRE LE PROFIL D'UN UTILISATEUR PAR SON ID
   @Get(':id')
@@ -123,10 +144,16 @@ export class UserController {
     return { message: 'Profil mis à jour avec succès' };
   }
 
-  // LISTE LES UTILISATEURS AVEC DES FILTRES OPTIONNELS
-  @Get()
-  async listUsers(@Query() filters: any) {
-    return this.userService.listUsers(filters);
+  @Put(':id/change-password')
+  async changePassword(
+    @Param('id') userId: number,
+    @Body() changePasswordDto: ChangePasswordDto
+  ) {
+    return this.userService.changePassword(
+      userId,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword
+    );
   }
 
   // RÉCUPÈRE LES STATISTIQUES D'UN UTILISATEUR, INCLUANT LE TRUST RATE
