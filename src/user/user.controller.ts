@@ -35,6 +35,16 @@ export class UserController {
     return this.userService.listUsers(filters);
   }
 
+  @Get('all-rankings')
+  async getAllUserRankings() {
+    return this.userService.listAllUsersByRanking();
+  }
+
+  @Get('ranking')
+  async getUserRanking(@Query('userId') userId: number) {
+    return this.userService.getUserRanking(userId);
+  }
+
   // Récupère les 10 utilisateurs les plus récents avec leur photo de profil
   @Get('top10')
   async getTop10Smarter() {

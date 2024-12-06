@@ -15,18 +15,64 @@ export class UserService {
   ) {}
 
   async listTop10Smarter() {
-    return await this.prisma.user.findMany({
-      take: 10, // Limiter à 10 utilisateurs
-      orderBy: { createdAt: 'desc' }, // Par exemple, trier par date de création
-      select: {
-        id: true,
-        username: true,
+    // Récupérer tous les utilisateurs et leur nombre de votes
+    const users = await this.prisma.user.findMany({
+      include: {
+        votes: true, // Inclure les votes pour calculer le total
         photos: {
           where: { isProfile: true },
           select: { url: true },
         },
       },
     });
+  
+    // Calculer le nombre de votes et trier
+    const usersWithRanking = users
+      .map((user) => ({
+        id: user.id,
+        username: user.username,
+        voteCount: user.votes.length,
+        photo: user.photos[0]?.url || null,
+      }))
+      .sort((a, b) => b.voteCount - a.voteCount); // Trier par votes décroissants
+  
+    // Ajouter les rangs à chaque utilisateur
+    const usersWithRankingAndPosition = usersWithRanking.map((user, index) => ({
+      ...user,
+      ranking: index + 1, // Classement basé sur la position
+    }));
+  
+    // Retourner les 10 meilleurs utilisateurs
+    return usersWithRankingAndPosition.slice(0, 10);
+  }
+
+  async listAllUsersByRanking() {
+    // Récupérer tous les utilisateurs avec leurs votes
+    const users = await this.prisma.user.findMany({
+      include: {
+        votes: true, // Inclure les votes pour chaque utilisateur
+        photos: {
+          where: { isProfile: true },
+          select: { url: true },
+        },
+      },
+    });
+  
+    // Calculer le nombre de votes et trier par votes décroissants
+    const usersWithRanking = users
+      .map((user) => ({
+        id: user.id,
+        username: user.username,
+        voteCount: user.votes.length,
+        photo: user.photos[0]?.url || null,
+      }))
+      .sort((a, b) => b.voteCount - a.voteCount);
+  
+    // Ajouter les rangs
+    return usersWithRanking.map((user, index) => ({
+      ...user,
+      ranking: index + 1, // Classement global
+    }));
   }
   
   // LISTE LES UTILISATEURS AVEC POSSIBILITÉ DE FILTRE
@@ -46,6 +92,34 @@ export class UserService {
     return users;
   }
 
+  async getUserRanking(userId: number) {
+    // Étape 1 : Récupérer les utilisateurs classés par votes
+    const users = await this.prisma.user.findMany({
+      include: {
+        votes: true, // Récupère les votes pour chaque utilisateur
+      },
+    });
+  
+    // Étape 2 : Calculer le nombre de votes pour chaque utilisateur
+    const usersWithVoteCount = users.map((user) => ({
+      id: user.id,
+      username: user.username,
+      voteCount: user.votes.length, // Nombre total de votes
+    }));
+  
+    // Étape 3 : Trier par le nombre de votes (ordre décroissant)
+    usersWithVoteCount.sort((a, b) => b.voteCount - a.voteCount);
+  
+    // Étape 4 : Trouver le rang de l'utilisateur actuel
+    const ranking = usersWithVoteCount.findIndex((user) => user.id === userId) + 1;
+  
+    return {
+      ranking,
+      totalUsers: usersWithVoteCount.length,
+      users: usersWithVoteCount,
+    };
+  }
+  
   async getUserById(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

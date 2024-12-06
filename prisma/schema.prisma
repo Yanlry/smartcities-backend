@@ -83,6 +83,7 @@ model Report {
   event       Event?    @relation("EventReports", fields: [eventId], references: [id])
   user        User      @relation(fields: [userId], references: [id])
   votes       Vote[]
+  ranking     Int? 
 }
 
 model Vote {
