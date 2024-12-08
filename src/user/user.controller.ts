@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   UseGuards,
+  NotFoundException,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -21,12 +22,15 @@ import { S3Service } from 'src/services/s3/s3.service';
 import { HttpException } from '@nestjs/common/exceptions/http.exception';
 import { Request } from '@nestjs/common';
 import { ChangePasswordDto } from './dto/changePassword.dto';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Controller('users')
 export class UserController {
   constructor(
     private readonly userService: UserService,
-    private readonly s3Service: S3Service
+    private readonly s3Service: S3Service,
+    private readonly prisma: PrismaService  
+
   ) {}
 
   // LISTE LES UTILISATEURS AVEC DES FILTRES OPTIONNELS
@@ -167,11 +171,30 @@ export class UserController {
   }
 
   // RÉCUPÈRE LES STATISTIQUES D'UN UTILISATEUR, INCLUANT LE TRUST RATE
-  @Get(':id/stats')
-  async getUserStats(@Param('id') id: string) {
-    const userId = parseInt(id, 10);
-    if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
-    return this.userService.getUserStats(userId);
+  @Get('/stats/:userId')
+  async getUserStats(@Param('userId') userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        votes: true, // Inclut les votes liés à cet utilisateur
+        reports: true, // Inclut les signalements liés à cet utilisateur
+      },
+    });
+  
+    if (!user) {
+      throw new NotFoundException("Utilisateur non trouvé");
+    }
+  
+    return {
+      numberOfReports: user.reports.length, // Nombre de signalements
+      trustRate: user.trustRate, // Taux de confiance
+      numberOfVotes: user.votes.length, // Nombre total de votes
+      votes: user.votes.map((vote) => ({
+        type: vote.type,
+        reportId: vote.reportId,
+        createdAt: vote.createdAt,
+      })), // Détails des votes
+    };
   }
 
   // SUPPRIME LE PROFIL DE L'UTILISATEUR

@@ -63,9 +63,22 @@ export class EventsService {
     return event;
   }
 
-  // LISTE TOUS LES ÉVÉNEMENTS
   async findAll() {
-    return this.prisma.event.findMany();
+    return this.prisma.event.findMany({
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        date: true,
+        location: true,
+        latitude: true,
+        longitude: true,
+        photos: true, // Inclure le champ image
+        createdAt: true,
+        updatedAt: true,
+        organizerId: true,
+      },
+    });
   }
 
   // RÉCUPÈRE LES DÉTAILS D'UN ÉVÉNEMENT PAR SON ID

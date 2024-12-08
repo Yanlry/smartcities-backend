@@ -87,13 +87,10 @@ export class EventsController {
       );
     }
   }
-
-  // RÉCUPÈRE TOUS LES ÉVÉNEMENT
   @Get()
   findAll() {
     return this.eventsService.findAll();
   }
-
   // RÉCUPÈRE LES DÉTAILS D'UN ÉVÉNEMENT PAR SON ID
   @Get(':id')
   findOne(@Param('id') id: string) {
