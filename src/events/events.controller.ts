@@ -9,6 +9,7 @@ import {
   BadRequestException,
   UseInterceptors,
   UploadedFiles,
+  Query,
 Logger } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { EventsService } from './events.service';
@@ -87,6 +88,12 @@ export class EventsController {
       );
     }
   }
+
+  @Get('/by-date')
+async findEventsByDate(@Query('date') date: string) {
+  return this.eventsService.findEventsByDate(date);
+}
+
   @Get()
   findAll() {
     return this.eventsService.findAll();

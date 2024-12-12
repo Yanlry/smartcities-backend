@@ -172,7 +172,7 @@ export class UserService {
     });
   
     if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
+      throw new NotFoundException('Utilisateur non trouvé5');
     }
   
     return {
