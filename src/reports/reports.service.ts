@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException, InternalServerErrorException} from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 
@@ -6,8 +11,8 @@ import { NotificationService } from '../notification/notification.service';
 export class ReportService {
   constructor(
     private prisma: PrismaService,
-    private readonly notificationService: NotificationService,
-  ) { }
+    private readonly notificationService: NotificationService
+  ) {}
 
   // CRÉE UN NOUVEAU SIGNAL
   async createReport(reportData: any, photoUrls: string[]) {
@@ -15,12 +20,25 @@ export class ReportService {
     console.log('Photo URLs reçues :', photoUrls);
 
     // Validation des champs obligatoires
-    if (!reportData.title || !reportData.description || !reportData.userId || !reportData.type) {
-      throw new BadRequestException('Les champs title, description, userId et type sont obligatoires.');
+    if (
+      !reportData.title ||
+      !reportData.description ||
+      !reportData.userId ||
+      !reportData.type
+    ) {
+      throw new BadRequestException(
+        'Les champs title, description, userId et type sont obligatoires.'
+      );
     }
 
-    if (!reportData.city || reportData.latitude === undefined || reportData.longitude === undefined) {
-      throw new BadRequestException('Les champs city, latitude et longitude sont obligatoires.');
+    if (
+      !reportData.city ||
+      reportData.latitude === undefined ||
+      reportData.longitude === undefined
+    ) {
+      throw new BadRequestException(
+        'Les champs city, latitude et longitude sont obligatoires.'
+      );
     }
 
     // Conversion des coordonnées et de l'identifiant utilisateur
@@ -29,7 +47,9 @@ export class ReportService {
     const userId = parseInt(reportData.userId.toString(), 10);
 
     if (isNaN(latitude) || isNaN(longitude) || isNaN(userId)) {
-      throw new BadRequestException('Latitude, longitude, et userId doivent être des nombres valides.');
+      throw new BadRequestException(
+        'Latitude, longitude, et userId doivent être des nombres valides.'
+      );
     }
 
     // Vérification de l'utilisateur
@@ -84,46 +104,47 @@ export class ReportService {
 
     // Envoi de notifications aux abonnés proches
     if (reportData.city) {
-      const nearbySubscribers = await this.prisma.notificationSubscription.findMany({
-        where: {
-          OR: [
-            { city: reportData.city },
-            {
-              latitude: {
-                gte: latitude - 0.1,
-                lte: latitude + 0.1,
+      const nearbySubscribers =
+        await this.prisma.notificationSubscription.findMany({
+          where: {
+            OR: [
+              { city: reportData.city },
+              {
+                latitude: {
+                  gte: latitude - 0.1,
+                  lte: latitude + 0.1,
+                },
+                longitude: {
+                  gte: longitude - 0.1,
+                  lte: longitude + 0.1,
+                },
               },
-              longitude: {
-                gte: longitude - 0.1,
-                lte: longitude + 0.1,
-              },
-            },
-          ],
-        },
-        select: { userId: true },
-      });
+            ],
+          },
+          select: { userId: true },
+        });
 
       for (const subscriber of nearbySubscribers) {
         await this.notificationService.createNotification(
           subscriber.userId,
           `Nouveau signalement dans votre zone : ${reportData.title}`,
           'report',
-          report.id,
+          report.id
         );
       }
     }
 
     return report;
   }
-  
+
   async listReports(filters: any) {
     const { latitude, longitude, radiusKm, ...otherFilters } = filters;
-  
+
     let where: any = { ...otherFilters };
-  
+
     if (latitude && longitude && radiusKm) {
       const radiusInDegrees = Number(radiusKm) / 111;
-  
+
       where.latitude = {
         gte: Number(latitude) - radiusInDegrees,
         lte: Number(latitude) + radiusInDegrees,
@@ -133,7 +154,7 @@ export class ReportService {
         lte: Number(longitude) + radiusInDegrees,
       };
     }
-  
+
     const reports = await this.prisma.report.findMany({
       where,
       select: {
@@ -160,20 +181,29 @@ export class ReportService {
         },
       },
     });
-  
-    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-      if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return Infinity;
+
+    const calculateDistance = (
+      lat1: number,
+      lon1: number,
+      lat2: number,
+      lon2: number
+    ): number => {
+      if (lat1 == null || lon1 == null || lat2 == null || lon2 == null)
+        return Infinity;
       const toRadians = (degree: number) => (degree * Math.PI) / 180;
       const R = 6371;
       const dLat = toRadians(lat2 - lat1);
       const dLon = toRadians(lon2 - lon1);
       const a =
         Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        Math.cos(toRadians(lat1)) *
+          Math.cos(toRadians(lat2)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     };
-  
+
     const reportsWithDistances = await Promise.all(
       reports.map(async (report) => {
         const distance = calculateDistance(
@@ -182,12 +212,16 @@ export class ReportService {
           report.latitude,
           report.longitude
         );
-  
-        const upVotes = report.votes.filter((vote) => vote.type === 'up').length;
-        const downVotes = report.votes.filter((vote) => vote.type === 'down').length;
-  
+
+        const upVotes = report.votes.filter(
+          (vote) => vote.type === 'up'
+        ).length;
+        const downVotes = report.votes.filter(
+          (vote) => vote.type === 'down'
+        ).length;
+
         const trustRate = await this.calculateTrustRate(report.userId);
-  
+
         return {
           ...report,
           distance,
@@ -198,7 +232,7 @@ export class ReportService {
         };
       })
     );
-  
+
     return reportsWithDistances.sort((a, b) => a.distance - b.distance);
   }
 
@@ -211,8 +245,27 @@ export class ReportService {
       { name: 'pollution', icon: 'leaf-outline' },
     ];
   }
+  // SERVICE : Récupère les statistiques des signalements par catégorie
+  async getStatisticsByCategory() {
+    const statistics = await this.prisma.report.groupBy({
+      by: ['type'], // Regroupe par type (catégorie)
+      _count: {
+        type: true, // Compte le nombre de chaque type
+      },
+    });
 
-  async isWithinRadius(lat1: number, lon1: number, userId: number): Promise<boolean> {
+    // Formate les données pour le frontend
+    return statistics.map((stat) => ({
+      label: stat.type,
+      count: stat._count.type,
+    }));
+  }
+
+  async isWithinRadius(
+    lat1: number,
+    lon1: number,
+    userId: number
+  ): Promise<boolean> {
     // Récupérer les coordonnées de l'utilisateur
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -221,11 +274,18 @@ export class ReportService {
 
     // Vérification des coordonnées de l'utilisateur
     if (!user || user.latitude === null || user.longitude === null) {
-      throw new BadRequestException("Utilisateur non trouvé ou coordonnées manquantes");
+      throw new BadRequestException(
+        'Utilisateur non trouvé ou coordonnées manquantes'
+      );
     }
 
     // Calculer la distance
-    const distance = this.calculateDistance(lat1, lon1, user.latitude, user.longitude);
+    const distance = this.calculateDistance(
+      lat1,
+      lon1,
+      user.latitude,
+      user.longitude
+    );
     console.log(`Distance calculée : ${distance} mètres`);
     console.log('Coordonnées utilisateur :', user.latitude, user.longitude);
     console.log('Coordonnées signalement :', lat1, lon1);
@@ -234,7 +294,13 @@ export class ReportService {
     // Vérifier si la distance est inférieure ou égale à 50 mètres
     return distance <= 50;
   }
-  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+
+  calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number {
     const R = 6371e3; // Rayon de la Terre en mètres
     const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
 
@@ -260,7 +326,7 @@ export class ReportService {
     let trustRate = 0;
     let validVotes = 0;
 
-    votes.forEach(vote => {
+    votes.forEach((vote) => {
       if (vote.type === 'up') {
         trustRate += 1;
         validVotes += 1;
@@ -302,13 +368,17 @@ export class ReportService {
     return validVotes > 0 ? trustRate / validVotes : 0; // Moyenne des votes valides
   }
 
-  async getReportById(id: number | string, latitude?: number, longitude?: number) {
+  async getReportById(
+    id: number | string,
+    latitude?: number,
+    longitude?: number
+  ) {
     const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
-  
+
     if (isNaN(numericId)) {
       throw new BadRequestException('ID invalide');
     }
-  
+
     const report = await this.prisma.report.findUnique({
       where: { id: numericId },
       select: {
@@ -328,7 +398,8 @@ export class ReportService {
             type: true,
           },
         },
-        photos: { // Ajout des photos
+        photos: {
+          // Ajout des photos
           select: {
             id: true,
             url: true,
@@ -336,36 +407,50 @@ export class ReportService {
         },
       },
     });
-  
+
     if (!report) {
       throw new NotFoundException('Signalement introuvable');
     }
-  
+
     let distance = null;
     if (latitude !== undefined && longitude !== undefined) {
-      const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+      const calculateDistance = (
+        lat1: number,
+        lon1: number,
+        lat2: number,
+        lon2: number
+      ): number => {
         const toRadians = (degree: number) => (degree * Math.PI) / 180;
         const R = 6371;
-  
+
         const dLat = toRadians(lat2 - lat1);
         const dLon = toRadians(lon2 - lon1);
-  
+
         const a =
           Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
-          Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  
+          Math.cos(toRadians(lat1)) *
+            Math.cos(toRadians(lat2)) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  
+
         return R * c;
       };
-  
-      distance = calculateDistance(latitude, longitude, report.latitude, report.longitude);
+
+      distance = calculateDistance(
+        latitude,
+        longitude,
+        report.latitude,
+        report.longitude
+      );
     }
-  
+
     const upVotes = report.votes.filter((vote) => vote.type === 'up').length;
-    const downVotes = report.votes.filter((vote) => vote.type === 'down').length;
-  
+    const downVotes = report.votes.filter(
+      (vote) => vote.type === 'down'
+    ).length;
+
     return {
       ...report,
       distance: distance !== null ? (distance < 0.001 ? 0 : distance) : null,
@@ -389,20 +474,32 @@ export class ReportService {
     });
   }
 
-  async voteOnReport(voteData: { reportId: number, userId: number, type: string, latitude: number, longitude: number }) {
+  async voteOnReport(voteData: {
+    reportId: number;
+    userId: number;
+    type: string;
+    latitude: number;
+    longitude: number;
+  }) {
     const { reportId, userId, type } = voteData;
-  
+
     try {
       if (!type || !['up', 'down'].includes(type)) {
         throw new BadRequestException('Type de vote invalide.');
       }
-      const report = await this.prisma.report.findUnique({ where: { id: reportId } });
+      const report = await this.prisma.report.findUnique({
+        where: { id: reportId },
+      });
       if (!report) {
-        throw new NotFoundException(`Signalement introuvable pour l'ID : ${reportId}`);
+        throw new NotFoundException(
+          `Signalement introuvable pour l'ID : ${reportId}`
+        );
       }
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
       if (!user) {
-        throw new NotFoundException(`Utilisateur introuvable pour l'ID : ${userId}`);
+        throw new NotFoundException(
+          `Utilisateur introuvable pour l'ID : ${userId}`
+        );
       }
       const existingVote = await this.prisma.vote.findFirst({
         where: {
@@ -410,9 +507,11 @@ export class ReportService {
           userId,
         },
       });
-  
+
       if (existingVote) {
-        throw new BadRequestException('Vous avez déjà voté pour ce signalement.');
+        throw new BadRequestException(
+          'Vous avez déjà voté pour ce signalement.'
+        );
       }
       const vote = await this.prisma.vote.create({
         data: {
@@ -429,7 +528,7 @@ export class ReportService {
         },
       });
       await this.updateUserTrustRate(userId);
-  
+
       return {
         message: 'Vote enregistré avec succès',
         updatedVotes: {
@@ -438,27 +537,36 @@ export class ReportService {
         },
       };
     } catch (error) {
-  
       // Log des erreurs spécifiques pour un meilleur débogage
-      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
         console.error('Erreur métier :', error.message);
       } else {
         console.error('Erreur inattendue :', error);
       }
-      throw new InternalServerErrorException('Erreur lors de l\'enregistrement du vote');
+      throw new InternalServerErrorException(
+        "Erreur lors de l'enregistrement du vote"
+      );
     }
   }
-  
-  
-  
-  
+
   // AJOUTE UN COMMENTAIRE À UN SIGNAL
-  async commentOnReport(commentData: { reportId: number, userId: number, text: string, latitude: number, longitude: number }) {
+  async commentOnReport(commentData: {
+    reportId: number;
+    userId: number;
+    text: string;
+    latitude: number;
+    longitude: number;
+  }) {
     const { reportId, userId, text, latitude, longitude } = commentData;
 
     // Vérifier que l'utilisateur est à proximité avant de permettre le commentaire
     if (!(await this.isWithinRadius(latitude, longitude, userId))) {
-      throw new BadRequestException('Vous devez être dans un rayon de 50 mètres pour commenter');
+      throw new BadRequestException(
+        'Vous devez être dans un rayon de 50 mètres pour commenter'
+      );
     }
 
     return this.prisma.comment.create({

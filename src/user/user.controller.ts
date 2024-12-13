@@ -62,6 +62,29 @@ export class UserController {
       );
     }
   }
+  @Put('display-preference')
+  async updateDisplayPreference(
+    @Body() { userId, useFullName }: { userId: number; useFullName: boolean }
+  ) {
+    // Vérifie si l'utilisateur existe
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+  
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+  
+    // Met à jour la préférence
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { useFullName },
+    });
+  
+    return updatedUser; // Retourne l'utilisateur mis à jour
+  }
+  
+  
 
   // RÉCUPÈRE LE PROFIL D'UN UTILISATEUR PAR SON ID
   @Get(':id')

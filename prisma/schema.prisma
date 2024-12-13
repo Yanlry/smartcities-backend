@@ -23,6 +23,7 @@ model User {
   firstName                 String                     @default("Unknown")
   lastName                  String                     @default("Unknown")
   username                  String?                    @unique
+  useFullName              Boolean                    @default(true) // Nouveau champ
   attendedEvents            Attendee[]
   comments                  Comment[]
   organizedEvents           Event[]                    @relation("UserEvents")

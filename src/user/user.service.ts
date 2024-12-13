@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
-import { last } from 'rxjs';
+import { first, last } from 'rxjs';
 import { S3Service } from 'src/services/s3/s3.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
+import { use } from 'passport';
 
 @Injectable()
 export class UserService {
@@ -25,23 +26,26 @@ export class UserService {
         },
       },
     });
-  
+
     // Calculer le nombre de votes et trier
     const usersWithRanking = users
       .map((user) => ({
         id: user.id,
         username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        useFullName: user.useFullName,
         voteCount: user.votes.length,
         photo: user.photos[0]?.url || null,
       }))
       .sort((a, b) => b.voteCount - a.voteCount); // Trier par votes décroissants
-  
+
     // Ajouter les rangs à chaque utilisateur
     const usersWithRankingAndPosition = usersWithRanking.map((user, index) => ({
       ...user,
       ranking: index + 1, // Classement basé sur la position
     }));
-  
+
     // Retourner les 10 meilleurs utilisateurs
     return usersWithRankingAndPosition.slice(0, 10);
   }
@@ -57,24 +61,27 @@ export class UserService {
         },
       },
     });
-  
+
     // Calculer le nombre de votes et trier par votes décroissants
     const usersWithRanking = users
       .map((user) => ({
         id: user.id,
         username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        useFullName: user.useFullName,
         voteCount: user.votes.length,
         photo: user.photos[0]?.url || null,
       }))
       .sort((a, b) => b.voteCount - a.voteCount);
-  
+
     // Ajouter les rangs
     return usersWithRanking.map((user, index) => ({
       ...user,
       ranking: index + 1, // Classement global
     }));
   }
-  
+
   // LISTE LES UTILISATEURS AVEC POSSIBILITÉ DE FILTRE
   async listUsers(filter: any) {
     const users = await this.prisma.user.findMany({
@@ -92,6 +99,32 @@ export class UserService {
     return users;
   }
 
+  // METTRE À JOUR LA PREFERENCE D'AFFICHAGE DE L'UTILISATEUR
+  async updateDisplayPreference(userId: number, useFullName: boolean) {
+    // Vérifie si l'utilisateur existe
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    // Met à jour la préférence d'affichage
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { useFullName },
+    });
+
+    return {
+      message: 'Préférence mise à jour avec succès',
+      user: {
+        id: updatedUser.id,
+        useFullName: updatedUser.useFullName,
+      },
+    };
+  }
+
   async getUserRanking(userId: number) {
     // Étape 1 : Récupérer les utilisateurs classés par votes
     const users = await this.prisma.user.findMany({
@@ -99,27 +132,28 @@ export class UserService {
         votes: true, // Récupère les votes pour chaque utilisateur
       },
     });
-  
+
     // Étape 2 : Calculer le nombre de votes pour chaque utilisateur
     const usersWithVoteCount = users.map((user) => ({
       id: user.id,
       username: user.username,
       voteCount: user.votes.length, // Nombre total de votes
     }));
-  
+
     // Étape 3 : Trier par le nombre de votes (ordre décroissant)
     usersWithVoteCount.sort((a, b) => b.voteCount - a.voteCount);
-  
+
     // Étape 4 : Trouver le rang de l'utilisateur actuel
-    const ranking = usersWithVoteCount.findIndex((user) => user.id === userId) + 1;
-  
+    const ranking =
+      usersWithVoteCount.findIndex((user) => user.id === userId) + 1;
+
     return {
       ranking,
       totalUsers: usersWithVoteCount.length,
       users: usersWithVoteCount,
     };
   }
-  
+
   async getUserById(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -129,6 +163,7 @@ export class UserService {
         username: true,
         lastName: true,
         firstName: true,
+        useFullName: true,
         createdAt: true,
         trustRate: true,
         latitude: true,
@@ -170,11 +205,11 @@ export class UserService {
         },
       },
     });
-  
+
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé5');
     }
-  
+
     return {
       ...user,
       profilePhoto: user.photos.length > 0 ? user.photos[0] : null,

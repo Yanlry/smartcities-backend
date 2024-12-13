@@ -82,6 +82,12 @@ export class ReportController {
     return this.reportService.listCategories();
   }
 
+   // Route : Obtenir les statistiques par catégorie
+   @Get('statistics')
+   async getStatisticsByCategory() {
+     return await this.reportService.getStatisticsByCategory();
+   }
+
   @Get(':id')
   async getReportById(
     @Param('id') id: number,
