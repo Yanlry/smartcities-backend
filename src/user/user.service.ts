@@ -160,6 +160,7 @@ export class UserService {
       select: {
         id: true,
         email: true,
+        showEmail: true,
         username: true,
         lastName: true,
         firstName: true,
@@ -212,6 +213,7 @@ export class UserService {
 
     return {
       ...user,
+      email: user.showEmail ? user.email : null,
       profilePhoto: user.photos.length > 0 ? user.photos[0] : null,
       followers: user.followers.map((f) => ({
         id: f.follower.id,
@@ -226,6 +228,18 @@ export class UserService {
     };
   }
 
+  async updateEmailVisibility(userId: number, showEmail: boolean) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { showEmail },
+    });
+  
+    return {
+      message: "Préférence mise à jour avec succès.",
+      showEmail: user.showEmail,
+    };
+  }
+  
   async updateProfilePhoto(
     userId: number,
     newProfilePhoto: Express.Multer.File

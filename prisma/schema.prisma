@@ -10,6 +10,7 @@ datasource db {
 model User {
   id                        Int                        @id @default(autoincrement())
   email                     String                     @unique
+  showEmail                 Boolean                    @default(false) // Nouveau champ  
   password                  String
   createdAt                 DateTime                   @default(now())
   refreshToken              String?

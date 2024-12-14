@@ -84,7 +84,10 @@ export class UserController {
     return updatedUser; // Retourne l'utilisateur mis à jour
   }
   
-  
+  @Post('show-email')
+async updateShowEmail(@Body() body: { userId: number; showEmail: boolean }) {
+  return this.userService.updateEmailVisibility(body.userId, body.showEmail);
+}
 
   // RÉCUPÈRE LE PROFIL D'UN UTILISATEUR PAR SON ID
   @Get(':id')
