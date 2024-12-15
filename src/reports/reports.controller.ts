@@ -31,29 +31,28 @@ export class ReportController {
       throw new BadRequestException('La latitude et la longitude sont nécessaires pour créer un signalement');
     }
   
-    // Filtrer les fichiers valides
-    const validPhotos = photos?.filter(
-      (file) => file.buffer && file.originalname && file.mimetype,
-    ) || [];
-    if (validPhotos.length === 0) {
-      throw new BadRequestException('Aucun fichier valide trouvé.');
-    }
-  
-  
     const photoUrls = [];
-    for (const photo of validPhotos) {
-      try {
-        const url = await this.s3Service.uploadFile(photo);
-        photoUrls.push(url);
-      } catch (error) {
-        console.error(`Error uploading file ${photo.originalname}:`, error.message);
-        throw new BadRequestException(
-          `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`,
-        );
+    if (photos && photos.length > 0) {
+      const validPhotos = photos.filter(
+        (file) => file.buffer && file.originalname && file.mimetype,
+      );
+      
+      for (const photo of validPhotos) {
+        try {
+          const url = await this.s3Service.uploadFile(photo);
+          photoUrls.push(url);
+        } catch (error) {
+          console.error(`Erreur lors de l'upload de la photo ${photo.originalname}:`, error.message);
+          throw new BadRequestException(
+            `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`,
+          );
+        }
       }
-    }
   
-    console.log('URLs des photos uploadées :', photoUrls);
+      console.log('URLs des photos uploadées :', photoUrls);
+    } else {
+      console.log('Aucune photo fournie pour ce signalement.');
+    }
   
     // Appel au service pour créer le signalement
     return this.reportService.createReport(reportData, photoUrls);
