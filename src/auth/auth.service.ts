@@ -21,7 +21,6 @@ export class AuthService {
     sgMail.setApiKey(process.env.SENDGRID_API_KEY); // INITIALISE LA CLÉ API DE SENDGRID
   }
 
-  // INSCRIT UN NOUVEL UTILISATEUR DANS LA BASE DE DONNÉES APRÈS AVOIR HASHÉ SON MOT DE PASSE
   async signup(
     email: string,
     password: string,
@@ -75,7 +74,17 @@ export class AuthService {
       });
     }
 
-    return user;
+    // Génération du token
+    const payload = { sub: user.id, email: user.email };
+    const token = this.jwtService.sign(payload);
+
+    // Retourner l'utilisateur avec le token
+    return {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      token,
+    };
   }
 
   // AUTHENTIFIE L'UTILISATEUR ET RETOURNE UN ACCESS TOKEN ET UN REFRESH TOKEN SI LES IDENTIFIANTS SONT VALIDES
