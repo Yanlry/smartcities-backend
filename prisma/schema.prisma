@@ -19,6 +19,8 @@ model User {
   trustRate                 Float?
   isSubscribed              Boolean                    @default(false)
   isMunicipality            Boolean                    @default(false)
+  nomCommune                String?   // Nom de la ville
+  codePostal                String?   // Code postal
   latitude                  Float?
   longitude                 Float?
   firstName                 String                     @default("Unknown")

@@ -27,25 +27,35 @@ export class AuthService {
     lastName: string,
     firstName: string,
     username: string,
-    photoUrls: string[]
+    photoUrls: string[],
+    nomCommune?: string,
+    codePostal?: string,
+    latitude?: number,
+    longitude?: number
   ) {
-    console.log('Photo URLs received in create service:', photoUrls);
-
+    console.log("Photo URLs received in create service:", photoUrls);
+  
     // Vérification des photos
     if (!photoUrls || photoUrls.length === 0) {
-      throw new BadRequestException('No valid photo URLs provided');
+      throw new BadRequestException("No valid photo URLs provided");
     }
-
+  
     // Vérifier si l'email existe déjà
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
-    if (existingUser)
-      throw new ConflictException('Cet email est déjà utilisé.');
-
+    if (existingUser) {
+      throw new ConflictException("Cet email est déjà utilisé.");
+    }
+  
     // Hachage du mot de passe
     const hashedPassword = await hash(password, 10);
-
+  
+    // Validation des coordonnées géographiques
+    if (latitude === undefined || longitude === undefined) {
+      throw new BadRequestException("Latitude et longitude sont obligatoires.");
+    }
+  
     // Création de l'utilisateur
     const user = await this.prisma.user.create({
       data: {
@@ -54,11 +64,15 @@ export class AuthService {
         lastName,
         firstName,
         username,
+        nomCommune, // Nom de la ville
+        codePostal, // Code postal
+        latitude,   // Latitude
+        longitude,  // Longitude
       },
     });
-
-    console.log('Utilisateur crée en base de donnée :', user);
-
+  
+    console.log("Utilisateur créé en base de données :", user);
+  
     // Ajout des photos et marquage de la première comme photo de profil
     if (photoUrls.length > 0) {
       const photosData = photoUrls.map((url, index) => ({
@@ -66,18 +80,20 @@ export class AuthService {
         userId: user.id,
         isProfile: index === 0, // La première photo devient la photo de profil
       }));
-
-      console.log("Photos associé au l'utilisateur:", photosData);
-
+  
+      console.log("Photos associées à l'utilisateur :", photosData);
+  
       await this.prisma.photo.createMany({
         data: photosData,
       });
     }
-
+  
     // Génération du token
     const payload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
-
+  
+    console.log("Token généré avec succès :", token);
+  
     // Retourner l'utilisateur avec le token
     return {
       id: user.id,
@@ -86,6 +102,8 @@ export class AuthService {
       token,
     };
   }
+  
+  
 
   // AUTHENTIFIE L'UTILISATEUR ET RETOURNE UN ACCESS TOKEN ET UN REFRESH TOKEN SI LES IDENTIFIANTS SONT VALIDES
   async login(email: string, password: string) {

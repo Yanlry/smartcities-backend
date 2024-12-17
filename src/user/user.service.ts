@@ -167,6 +167,8 @@ export class UserService {
         useFullName: true,
         createdAt: true,
         trustRate: true,
+        nomCommune: true,
+        codePostal: true,
         latitude: true,
         longitude: true,
         photos: {

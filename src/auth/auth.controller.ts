@@ -27,56 +27,86 @@ export class AuthController {
     private readonly s3Service: S3Service
   ) {}
 
-  // CRÉE UN NOUVEL UTILISATEUR AVEC UN EMAIL, UN MOT DE PASSE ET UN NOM FOURNIS
-  @Post('signup')
-  @UseInterceptors(
-    FilesInterceptor('photos', 1, {
-      limits: { fileSize: 10 * 1024 * 1024 }, // Limite à 10 Mo
-    })
-  )
-  async signup(
-    @Body('email') email: string,
-    @Body('password') password: string,
-    @Body('lastName') lastName: string,
-    @Body('firstName') firstName: string,
-    @Body('username') username: string,
-    @UploadedFiles() photos: Express.Multer.File[]
-  ) {
-    // Filtrer les fichiers valides
-    const validPhotos =
-      photos?.filter(
-        (file) => file.buffer && file.originalname && file.mimetype
-      ) || [];
-    if (validPhotos.length === 0) {
-      throw new BadRequestException('Aucun fichier valide trouvé.');
-    }
+// CRÉE UN NOUVEL UTILISATEUR AVEC UN EMAIL, UN MOT DE PASSE ET UN NOM FOURNIS
+@Post('signup')
+@UseInterceptors(
+  FilesInterceptor('photos', 1, {
+    limits: { fileSize: 10 * 1024 * 1024 }, // Limite à 10 Mo
+  })
+)
+async signup(
+  @Body('email') email: string,
+  @Body('password') password: string,
+  @Body('lastName') lastName: string,
+  @Body('firstName') firstName: string,
+  @Body('username') username: string,
+  @Body('nom_commune') nomCommune: string,
+  @Body('code_postal') codePostal: string,
+  @Body('latitude') latitude: string,
+  @Body('longitude') longitude: string,
+  @UploadedFiles() photos: Express.Multer.File[]
+) {
+  console.log("Données reçues du frontend :", {
+    email,
+    nomCommune,
+    codePostal,
+    latitude,
+    longitude,
+  });
 
-    const photoUrls = [];
-    for (const photo of validPhotos) {
-      try {
-        const url = await this.s3Service.uploadFile(photo);
-        photoUrls.push(url);
-      } catch (error) {
-        console.error(
-          `Error uploading file ${photo.originalname}:`,
-          error.message
-        );
-        throw new BadRequestException(
-          `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`
-        );
-      }
-    }
+  // Validation des coordonnées
+  const latitudeNumber = parseFloat(latitude);
+  const longitudeNumber = parseFloat(longitude);
 
-    // Appel au service pour créer le signalement
-    return this.authService.signup(
-      email,
-      password,
-      firstName,
-      lastName,
-      username,
-      photoUrls
+  if (isNaN(latitudeNumber) || isNaN(longitudeNumber)) {
+    throw new BadRequestException(
+      "Latitude et longitude doivent être des nombres valides."
     );
   }
+
+  // Filtrer les fichiers valides
+  const validPhotos =
+    photos?.filter(
+      (file) => file.buffer && file.originalname && file.mimetype
+    ) || [];
+
+  if (validPhotos.length === 0) {
+    throw new BadRequestException('Aucun fichier valide trouvé.');
+  }
+
+  const photoUrls = [];
+  for (const photo of validPhotos) {
+    try {
+      const url = await this.s3Service.uploadFile(photo);
+      photoUrls.push(url);
+    } catch (error) {
+      console.error(
+        `Error uploading file ${photo.originalname}:`,
+        error.message
+      );
+      throw new BadRequestException(
+        `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`
+      );
+    }
+  }
+
+  console.log("URLs des photos après upload :", photoUrls);
+
+  // Appel au service pour créer l'utilisateur
+  return this.authService.signup(
+    email,
+    password,
+    firstName,
+    lastName,
+    username,
+    photoUrls,
+    nomCommune, // Nom de la ville
+    codePostal, // Code postal
+    latitudeNumber, // Latitude convertie
+    longitudeNumber // Longitude convertie
+  );
+}
+
 
   // AUTHENTIFIE UN UTILISATEUR ET RETOURNE UN TOKEN JWT S'IL RÉUSSIT
   @Post('login')
