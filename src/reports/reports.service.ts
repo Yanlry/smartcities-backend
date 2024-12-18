@@ -343,11 +343,6 @@ export class ReportService {
     });
   }
 
-  // CONVERSION DES DEGRÉS EN RADIANS
-  private degreesToRadians(degrees: number): number {
-    return degrees * (Math.PI / 180);
-  }
-
   // CALCUL DU TRUST RATE DE L'UTILISATEUR EN FONCTION DE SES VOTES
   private async calculateTrustRate(userId: number): Promise<number> {
     const votes = await this.prisma.vote.findMany({
@@ -396,6 +391,20 @@ export class ReportService {
         votes: {
           select: {
             type: true,
+          },
+        },
+        comments: {
+          select: {
+            id: true,
+            text: true,
+            createdAt: true,
+            userId: true,
+            user: {
+              select: {
+                id: true,
+                username: true,
+              },
+            },
           },
         },
         photos: {
@@ -562,12 +571,7 @@ export class ReportService {
   }) {
     const { reportId, userId, text, latitude, longitude } = commentData;
 
-    // Vérifier que l'utilisateur est à proximité avant de permettre le commentaire
-    if (!(await this.isWithinRadius(latitude, longitude, userId))) {
-      throw new BadRequestException(
-        'Vous devez être dans un rayon de 50 mètres pour commenter'
-      );
-    }
+  
 
     return this.prisma.comment.create({
       data: {
