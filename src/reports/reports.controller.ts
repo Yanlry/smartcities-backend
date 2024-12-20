@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Logger, Put, Delete, Param, Body, Query, BadRequestException, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Controller, UseGuards, Get, Post, Logger, Put, Delete, Param, Body, Query, Req, BadRequestException, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { ReportService } from './reports.service';
 import { VoteOnReportDto } from './dto/vote-on-report.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { S3Service } from '../services/s3/s3.service';
-
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('reports')
 export class ReportController {
@@ -97,7 +97,7 @@ export class ReportController {
     const lat = latitude ? Number(latitude) : undefined;
     const lon = longitude ? Number(longitude) : undefined;
   
-    return this.reportService.getReportById(id, lat, lon);
+    return this.reportService.getReporById(id, lat, lon);
   }
 
   // MET À JOUR UN SIGNAL
@@ -110,6 +110,13 @@ export class ReportController {
   @Delete(':id')
   async deleteReport(@Param('id') id: string) {
     return this.reportService.deleteReport(Number(id));
+  }
+
+  @Delete('comment/:id')
+  @UseGuards(JwtAuthGuard)
+  async deleteComment(@Param('id') commentId: number, @Req() req: any) {
+    const userId = req.user.id; // ID de l'utilisateur connecté
+    return this.reportService.deleteComment(commentId, userId);
   }
 
   // VOTE POUR OU CONTRE UN SIGNAL
@@ -141,10 +148,9 @@ export class ReportController {
     return this.reportService.commentOnReport(commentData);
   }
 
-  // ROUTE POUR RÉCUPÉRER LES COMMENTAIRES D'UN SIGNAL
   @Get(':id/comments')
   async getCommentsByReportId(@Param('id') id: string) {
     const reportId = parseInt(id, 10);
-    return this.reportService.getCommentsByReportId(reportId);
+    return this.reportService.getCommentsWithReplies(reportId);
   }
 }

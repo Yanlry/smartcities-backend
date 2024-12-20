@@ -100,7 +100,7 @@ async updateShowEmail(@Body() body: { userId: number; showEmail: boolean }) {
   @Post(':userId/profile-image')
   @UseInterceptors(
     FilesInterceptor('profileImage', 1, {
-      limits: { fileSize: 10 * 1024 * 1024 }, // Limite de 10 Mo
+      limits: { fileSize: 15 * 1024 * 1024 }, // Limite de 10 Mo
     })
   )
   async updateProfileImage(

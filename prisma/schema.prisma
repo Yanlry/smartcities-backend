@@ -114,15 +114,20 @@ model Like {
 }
 
 model Comment {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   text      String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   reportId  Int?
   userId    Int
   postId    Int?
-  post      Post?    @relation(fields: [postId], references: [id])
-  report    Report?  @relation(fields: [reportId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  parentId  Int?      // ID du commentaire parent (null pour les commentaires principaux)
+
+  post      Post?     @relation(fields: [postId], references: [id])
+  report    Report?   @relation(fields: [reportId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  replies   Comment[] @relation("CommentReplies") // Pas d'onDelete ici
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade) // Ajout de onDelete ici
 }
 
 model Post {

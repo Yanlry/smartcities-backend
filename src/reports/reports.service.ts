@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   InternalServerErrorException,
+  ForbiddenException
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
@@ -363,7 +364,7 @@ export class ReportService {
     return validVotes > 0 ? trustRate / validVotes : 0; // Moyenne des votes valides
   }
 
-  async getReportById(
+  async getReporById(
     id: number | string,
     latitude?: number,
     longitude?: number
@@ -374,6 +375,7 @@ export class ReportService {
       throw new BadRequestException('ID invalide');
     }
 
+    // Récupération complète du rapport
     const report = await this.prisma.report.findUnique({
       where: { id: numericId },
       select: {
@@ -383,32 +385,20 @@ export class ReportService {
         createdAt: true,
         updatedAt: true,
         userId: true,
-        user: true,
+        user: {
+          select: {
+            id: true,
+            username: true,
+          },
+        },
         type: true,
         latitude: true,
         longitude: true,
         city: true,
         votes: {
-          select: {
-            type: true,
-          },
-        },
-        comments: {
-          select: {
-            id: true,
-            text: true,
-            createdAt: true,
-            userId: true,
-            user: {
-              select: {
-                id: true,
-                username: true,
-              },
-            },
-          },
+          select: { type: true },
         },
         photos: {
-          // Ajout des photos
           select: {
             id: true,
             url: true,
@@ -421,6 +411,56 @@ export class ReportService {
       throw new NotFoundException('Signalement introuvable');
     }
 
+    // Fonction récursive pour récupérer les commentaires imbriqués
+    const fetchCommentsWithReplies = async (parentId: number | null) => {
+      const comments = await this.prisma.comment.findMany({
+        where: { reportId: numericId, parentId },
+        select: {
+          id: true,
+          text: true,
+          createdAt: true,
+          user: {
+            select: {
+              id: true,
+              username: true,
+              useFullName: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          replies: {
+            select: {
+              id: true,
+              text: true,
+              createdAt: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  useFullName: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
+              replies: true, // Récursivité incluse
+            },
+          },
+        },
+      });
+
+      // Ajout récursif des réponses
+      return await Promise.all(
+        comments.map(async (comment) => ({
+          ...comment,
+          replies: await fetchCommentsWithReplies(comment.id),
+        }))
+      );
+    };
+
+    // Récupération des commentaires principaux et leurs réponses
+    const comments = await fetchCommentsWithReplies(null);
+
+    // Calcul de la distance
     let distance = null;
     if (latitude !== undefined && longitude !== undefined) {
       const calculateDistance = (
@@ -455,16 +495,118 @@ export class ReportService {
       );
     }
 
+    // Calcul des votes
     const upVotes = report.votes.filter((vote) => vote.type === 'up').length;
     const downVotes = report.votes.filter(
       (vote) => vote.type === 'down'
     ).length;
 
+    // Retourne le rapport avec commentaires imbriqués
     return {
       ...report,
+      comments,
       distance: distance !== null ? (distance < 0.001 ? 0 : distance) : null,
       upVotes,
       downVotes,
+    };
+  }
+  async getCommentsWithReplies(reportId: number) {
+    const comments = await this.prisma.comment.findMany({
+      where: { reportId, parentId: null },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            useFullName: true,
+            photos: {
+              where: { isProfile: true }, // Récupère uniquement la photo de profil
+              select: { url: true },
+            },
+          },
+        },
+        replies: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                useFullName: true,
+                photos: {
+                  where: { isProfile: true }, // Récupère uniquement la photo de profil
+                  select: { url: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  
+    // Enrichir chaque commentaire avec `profilePhoto`
+    return comments.map((comment) => ({
+      ...comment,
+      user: {
+        ...comment.user,
+        profilePhoto: comment.user.photos.length > 0 ? comment.user.photos[0].url : null,
+      },
+      replies: comment.replies.map((reply) => ({
+        ...reply,
+        user: {
+          ...reply.user,
+          profilePhoto: reply.user.photos.length > 0 ? reply.user.photos[0].url : null,
+        },
+      })),
+    }));
+  }
+
+  async commentOnReport(commentData: {
+    reportId?: number;
+    userId: number;
+    text: string;
+    parentId?: number;
+  }) {
+    const { reportId, userId, text, parentId } = commentData;
+  
+    console.log("Données reçues pour le commentaire :", commentData);
+  
+    const newComment = await this.prisma.comment.create({
+      data: {
+        text,
+        reportId,
+        userId,
+        parentId,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            useFullName: true,
+            photos: {
+              where: { isProfile: true },
+              select: { url: true },
+            },
+          },
+        },
+      },
+    });
+  
+    console.log("Nouveau commentaire créé :", newComment);
+  
+    // Ajouter le champ `profilePhoto`
+    return {
+      ...newComment,
+      user: {
+        ...newComment.user,
+        profilePhoto: newComment.user.photos.length > 0 ? newComment.user.photos[0].url : null,
+      },
     };
   }
 
@@ -561,25 +703,37 @@ export class ReportService {
     }
   }
 
-  // AJOUTE UN COMMENTAIRE À UN SIGNAL
-  async commentOnReport(commentData: {
-    reportId: number;
-    userId: number;
-    text: string;
-    latitude: number;
-    longitude: number;
-  }) {
-    const { reportId, userId, text, latitude, longitude } = commentData;
-
+  async deleteComment(commentId: number, userId: number) {
+    console.log(
+      "Suppression du commentaire:",
+      commentId,
+      "par l'utilisateur:",
+      userId
+    );
   
-
-    return this.prisma.comment.create({
-      data: {
-        reportId,
-        userId,
-        text,
-      },
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      include: { parent: true }, // Inclure le parent pour vérifier la relation
     });
+  
+    if (!comment) {
+      console.log("Commentaire non trouvé.");
+      throw new NotFoundException("Commentaire introuvable.");
+    }
+  
+    // Vérifiez si l'utilisateur est l'auteur du commentaire ou d'une réponse
+    if (comment.userId !== userId) {
+      console.log(
+        "Tentative de suppression non autorisée par l'utilisateur:",
+        userId
+      );
+      throw new ForbiddenException(
+        "Vous n'êtes pas autorisé à supprimer ce commentaire ou cette réponse."
+      );
+    }
+  
+    console.log("Suppression du commentaire ou réponse réussie.");
+    return this.prisma.comment.delete({ where: { id: commentId } });
   }
 
   // MÉTHODE POUR RÉCUPÉRER LES COMMENTAIRES D'UN SIGNAL
