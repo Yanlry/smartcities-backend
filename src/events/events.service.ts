@@ -73,7 +73,7 @@ export class EventsService {
     const startDate = new Date(date);
     const endDate = new Date(startDate);
     endDate.setDate(startDate.getDate() + 1); // Le jour suivant
-  
+
     return this.prisma.event.findMany({
       where: {
         date: {
@@ -86,7 +86,7 @@ export class EventsService {
       },
     });
   }
-  
+
   async findAll() {
     return this.prisma.event.findMany({
       select: {
@@ -97,24 +97,98 @@ export class EventsService {
         location: true,
         latitude: true,
         longitude: true,
-        photos: true, // Inclure le champ image
+        photos: true, // Inclure les photos de l'événement
         createdAt: true,
         updatedAt: true,
         organizerId: true,
+        attendees: {
+          select: {
+            userId: true,
+            status: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                username: true,
+                photos: {
+                  select: {
+                    url: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
   }
 
-  // RÉCUPÈRE LES DÉTAILS D'UN ÉVÉNEMENT PAR SON ID
-  async findOne(id: number) {
+  async joinEvent(eventId: number, userId: number) {
+    // Vérifier si l'événement existe
     const event = await this.prisma.event.findUnique({
-      where: { id },
-      include: {
-        photos: true, // Assurez-vous que la relation `photos` existe dans votre modèle Prisma
+      where: { id: eventId },
+    });
+    if (!event) {
+      throw new NotFoundException('Événement non trouvé.');
+    }
+  
+    // Vérifier si l'utilisateur existe
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé.');
+    }
+  
+    // Vérifier si l'utilisateur est déjà inscrit
+    const existingAttendee = await this.prisma.attendee.findFirst({
+      where: {
+        eventId,
+        userId,
       },
     });
-    if (!event) throw new NotFoundException('Event not found');
-    return event;
+    if (existingAttendee) {
+      throw new BadRequestException('Utilisateur déjà inscrit à cet événement.');
+    }
+  
+    // Inscrire l'utilisateur
+    await this.prisma.attendee.create({
+      data: {
+        eventId,
+        userId,
+        status: 'confirmed', // Exemple de statut par défaut
+      },
+    });
+  
+    // Retourner l'événement avec les participants mis à jour
+    return this.findOne(eventId);
+  }
+
+  // Backend: Ajouter les participants avec leurs informations
+  async findOne(eventId: number) {
+    return this.prisma.event.findUnique({
+      where: { id: eventId },
+      include: {
+        photos: true,
+        attendees: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                username: true,
+                useFullName: true,
+                photos: {
+                  where: { isProfile: true }, // Facultatif : inclure uniquement la photo de profil
+                  select: { url: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
   }
 
   // MET À JOUR LES INFORMATIONS D'UN ÉVÉNEMENT
@@ -123,6 +197,17 @@ export class EventsService {
       where: { id },
       data,
     });
+  }
+
+  async isRegistered(eventId: number, userId: number) {
+    const attendee = await this.prisma.attendee.findFirst({
+      where: {
+        eventId,
+        userId,
+      },
+    });
+
+    return { isRegistered: !!attendee };
   }
 
   // INVITE UN UTILISATEUR À UN ÉVÉNEMENT
@@ -246,5 +331,23 @@ export class EventsService {
     }
 
     return deletedEvent;
+  }
+
+  async leaveEvent(eventId: number, userId: number) {
+    // Vérifie si l'utilisateur est inscrit
+    const attendee = await this.prisma.attendee.findFirst({
+      where: { eventId, userId },
+    });
+  
+    if (!attendee) {
+      throw new BadRequestException(
+        "L'utilisateur n'est pas inscrit à cet événement."
+      );
+    }
+  
+    // Supprime l'inscription
+    return this.prisma.attendee.delete({
+      where: { id: attendee.id },
+    });
   }
 }

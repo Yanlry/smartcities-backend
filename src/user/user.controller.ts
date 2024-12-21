@@ -196,31 +196,9 @@ async updateShowEmail(@Body() body: { userId: number; showEmail: boolean }) {
     );
   }
 
-  // RÉCUPÈRE LES STATISTIQUES D'UN UTILISATEUR, INCLUANT LE TRUST RATE
   @Get('/stats/:userId')
   async getUserStats(@Param('userId') userId: number) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        votes: true, // Inclut les votes liés à cet utilisateur
-        reports: true, // Inclut les signalements liés à cet utilisateur
-      },
-    });
-  
-    if (!user) {
-      throw new NotFoundException("Utilisateur non trouvé");
-    }
-  
-    return {
-      numberOfReports: user.reports.length, // Nombre de signalements
-      trustRate: user.trustRate, // Taux de confiance
-      numberOfVotes: user.votes.length, // Nombre total de votes
-      votes: user.votes.map((vote) => ({
-        type: vote.type,
-        reportId: vote.reportId,
-        createdAt: vote.createdAt,
-      })), // Détails des votes
-    };
+    return await this.userService.getUserStats(userId);
   }
 
   // SUPPRIME LE PROFIL DE L'UTILISATEUR

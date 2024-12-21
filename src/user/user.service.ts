@@ -365,25 +365,34 @@ export class UserService {
       },
     });
   }
-
-  // RÉCUPÈRE LES STATISTIQUES D'UN UTILISATEUR (INCLUANT LE TRUST RATE)
   async getUserStats(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: {
-        reports: true,
-        trustRate: true, // Inclure le trustRate dans les statistiques
+      include: {
+        reports: true,          // Signalements
+        votes: true,            // Votes
+        comments: true,         // Commentaires
+        organizedEvents: true,  // Événements organisés
+        posts: true,            // Publications
       },
     });
-
+  
     if (!user) throw new NotFoundException('Utilisateur non trouvé');
-
+  
     return {
-      numberOfReports: user.reports.length, // Compte les signalements
-      trustRate: user.trustRate, // Récupère le trustRate
+      numberOfReports: user.reports.length,       // Nombre de signalements
+      trustRate: user.trustRate || 0,            // Taux de confiance
+      numberOfVotes: user.votes.length,          // Nombre de votes
+      numberOfComments: user.comments.length,    // Nombre de commentaires
+      numberOfEventsCreated: user.organizedEvents.length, // Nombre d'événements créés
+      numberOfPosts: user.posts.length,          // Nombre de publications
+      votes: user.votes.map((vote) => ({
+        type: vote.type,
+        reportId: vote.reportId,
+        createdAt: vote.createdAt,
+      })),
     };
   }
-
   // S'ABONNER A UN UTILISATEUR
   async followUser(userId: number, followerId: number) {
     const follow = await this.prisma.userFollow.create({

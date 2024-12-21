@@ -13,6 +13,7 @@ import { MessagesModule } from './messages/messages.module';
 import { MapModule } from './map/map.module';
 import { NotificationModule } from './notification/notification.module';
 import { StatsModule } from './stats/stats.module';
+import { MailModule } from './mails/mail.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { StatsModule } from './stats/stats.module';
     MapModule,
     NotificationModule,
     StatsModule,
+    MailModule
   ],
   providers: [PrismaService, AppConfigService],
   controllers: [AppConfigController], // Ajoute le contrôleur

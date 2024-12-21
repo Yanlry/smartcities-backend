@@ -10,7 +10,8 @@ import {
   UseInterceptors,
   UploadedFiles,
   Query,
-Logger } from '@nestjs/common';
+  Logger,
+} from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -30,11 +31,11 @@ export class EventsController {
   @UseInterceptors(
     FilesInterceptor('photos', 7, {
       limits: { fileSize: 10 * 1024 * 1024 }, // Limite à 10 Mo
-    }),
+    })
   )
   async create(
     @Body() createEventDto: CreateEventDto,
-    @UploadedFiles() photos: Express.Multer.File[],
+    @UploadedFiles() photos: Express.Multer.File[]
   ) {
     this.logger.log('Creating event...');
     this.logger.debug('Received Body:', createEventDto);
@@ -46,7 +47,7 @@ export class EventsController {
 
     // Filtrer les fichiers valides
     const validPhotos = photos.filter(
-      (file) => file.buffer && file.originalname && file.mimetype,
+      (file) => file.buffer && file.originalname && file.mimetype
     );
     if (validPhotos.length === 0) {
       throw new BadRequestException('Aucun fichier valide trouvé.');
@@ -66,10 +67,10 @@ export class EventsController {
       } catch (error) {
         this.logger.error(
           `Error uploading file ${photo.originalname}:`,
-          error.message,
+          error.message
         );
         throw new BadRequestException(
-          `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`,
+          `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`
         );
       }
     }
@@ -84,20 +85,44 @@ export class EventsController {
     } catch (error) {
       this.logger.error('Error creating event:', error.message);
       throw new BadRequestException(
-        `Erreur lors de la création de l'événement : ${error.message}`,
+        `Erreur lors de la création de l'événement : ${error.message}`
       );
     }
   }
 
   @Get('/by-date')
-async findEventsByDate(@Query('date') date: string) {
-  return this.eventsService.findEventsByDate(date);
-}
+  async findEventsByDate(@Query('date') date: string) {
+    return this.eventsService.findEventsByDate(date);
+  }
 
   @Get()
   findAll() {
     return this.eventsService.findAll();
   }
+
+  @Get(':eventId/is-registered')
+  async isRegistered(
+    @Param('eventId') eventId: number,
+    @Query('userId') userId: number
+  ) {
+    return this.eventsService.isRegistered(eventId, userId); // Appel au service
+  }
+
+  @Post(':eventId/join')
+  async joinEvent(
+    @Param('eventId') eventId: number,
+    @Body('userId') userId: number
+  ) {
+    try {
+      const event = await this.eventsService.joinEvent(eventId, userId);
+      return { message: 'Inscription réussie.', event };
+    } catch (error) {
+      throw new BadRequestException(
+        `Erreur lors de l'inscription à l'événement : ${error.message}`
+      );
+    }
+  }
+
   // RÉCUPÈRE LES DÉTAILS D'UN ÉVÉNEMENT PAR SON ID
   @Get(':id')
   findOne(@Param('id') id: string) {
@@ -146,4 +171,19 @@ async findEventsByDate(@Query('date') date: string) {
     const eventId = parseInt(id, 10);
     return this.eventsService.remove(eventId, userId);
   }
+
+  @Delete(':eventId/leave')
+async leaveEvent(
+  @Param('eventId') eventId: number,
+  @Body('userId') userId: number
+) {
+  try {
+    const result = await this.eventsService.leaveEvent(eventId, userId);
+    return { message: 'Désinscription réussie.', result };
+  } catch (error) {
+    throw new BadRequestException(
+      `Erreur lors de la désinscription de l'événement : ${error.message}`
+    );
+  }
+}
 }
