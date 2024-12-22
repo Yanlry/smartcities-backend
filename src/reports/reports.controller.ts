@@ -138,15 +138,20 @@ export class ReportController {
     return this.reportService.voteOnReport(voteData);
   }
   
-  // AJOUTE UN COMMENTAIRE À UN SIGNAL
   @Post('comment')
   async commentOnReport(@Body() commentData: any) {
-    // Vérifier que la latitude et la longitude sont présentes pour valider la proximité
-    if (!commentData.latitude || !commentData.longitude) {
-      throw new BadRequestException('La latitude et la longitude sont nécessaires pour commenter');
+    console.log('Données reçues dans le contrôleur :', commentData);
+  
+    // Vérifiez explicitement la clé text
+    if (!commentData.text || typeof commentData.text !== 'string' || commentData.text.trim() === '') {
+      console.error('Le contenu du commentaire est requis mais manquant ou invalide.');
+      throw new BadRequestException('Le contenu du commentaire est requis.');
     }
+  
+    // Appeler le service
     return this.reportService.commentOnReport(commentData);
   }
+  
 
   @Get(':id/comments')
   async getCommentsByReportId(@Param('id') id: string) {

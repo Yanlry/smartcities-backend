@@ -13,6 +13,7 @@ import {
   UploadedFiles,
   UseGuards,
   NotFoundException,
+  HttpStatus
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -148,14 +149,40 @@ async updateShowEmail(@Body() body: { userId: number; showEmail: boolean }) {
     return this.userService.getUserWithFollowers(Number(userId));
   }
 
-  // SUIVRE UN UTILISATEUR
-  @Post(':id/follow')
-  followUser(
-    @Param('id') userId: string,
-    @Body('followerId') followerId: number
-  ) {
-    return this.userService.followUser(+userId, followerId);
+ // SUIVRE UN UTILISATEUR
+@Post(':id/follow')
+async followUser(
+  @Param('id') userId: string,
+  @Body('followerId') followerId: number
+) {
+  try {
+    // Appelle le service pour effectuer le suivi
+    const follow = await this.userService.followUser(+userId, followerId);
+
+    // Retourne une réponse de succès
+    return {
+      success: true,
+      message: 'Utilisateur suivi avec succès.',
+      data: follow,
+    };
+  } catch (error) {
+    // Log de l'erreur
+    console.error('Erreur lors du suivi de l\'utilisateur :', error.message);
+
+    // Gestion des erreurs en fonction du type d'exception
+    if (error instanceof NotFoundException) {
+      throw new NotFoundException(error.message);
+    } else if (error instanceof BadRequestException) {
+      throw new BadRequestException(error.message);
+    }
+
+    // Erreur générique
+    throw new HttpException(
+      'Une erreur interne s\'est produite lors du suivi.',
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
   }
+}
 
   // UNFOLLOW UN UTILISATEUR
   @Delete(':id/unfollow')

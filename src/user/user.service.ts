@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, forwardRef , Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { S3Service } from 'src/services/s3/s3.service';
@@ -9,9 +9,11 @@ import * as bcrypt from 'bcrypt';
 export class UserService {
   constructor(
     private prisma: PrismaService,
+    @Inject(forwardRef(() => NotificationService)) // Injection avec forwardRef
     private readonly notificationService: NotificationService,
     private readonly s3Service: S3Service
   ) {}
+
 
   async listTop10Smarter() {
     // Récupérer tous les utilisateurs et leur nombre de votes
@@ -233,13 +235,13 @@ export class UserService {
       where: { id: userId },
       data: { showEmail },
     });
-  
+
     return {
-      message: "Préférence mise à jour avec succès.",
+      message: 'Préférence mise à jour avec succès.',
       showEmail: user.showEmail,
     };
   }
-  
+
   async updateProfilePhoto(
     userId: number,
     newProfilePhoto: Express.Multer.File
@@ -365,27 +367,28 @@ export class UserService {
       },
     });
   }
+
   async getUserStats(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        reports: true,          // Signalements
-        votes: true,            // Votes
-        comments: true,         // Commentaires
-        organizedEvents: true,  // Événements organisés
-        posts: true,            // Publications
+        reports: true, // Signalements
+        votes: true, // Votes
+        comments: true, // Commentaires
+        organizedEvents: true, // Événements organisés
+        posts: true, // Publications
       },
     });
-  
+
     if (!user) throw new NotFoundException('Utilisateur non trouvé');
-  
+
     return {
-      numberOfReports: user.reports.length,       // Nombre de signalements
-      trustRate: user.trustRate || 0,            // Taux de confiance
-      numberOfVotes: user.votes.length,          // Nombre de votes
-      numberOfComments: user.comments.length,    // Nombre de commentaires
+      numberOfReports: user.reports.length, // Nombre de signalements
+      trustRate: user.trustRate || 0, // Taux de confiance
+      numberOfVotes: user.votes.length, // Nombre de votes
+      numberOfComments: user.comments.length, // Nombre de commentaires
       numberOfEventsCreated: user.organizedEvents.length, // Nombre d'événements créés
-      numberOfPosts: user.posts.length,          // Nombre de publications
+      numberOfPosts: user.posts.length, // Nombre de publications
       votes: user.votes.map((vote) => ({
         type: vote.type,
         reportId: vote.reportId,
@@ -393,26 +396,68 @@ export class UserService {
       })),
     };
   }
-  // S'ABONNER A UN UTILISATEUR
+
   async followUser(userId: number, followerId: number) {
+    console.log('Vérification de la relation existante...');
+    const existingFollow = await this.prisma.userFollow.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId,
+          followingId: userId,
+        },
+      },
+    });
+  
+    if (existingFollow) {
+      console.log('Relation existante détectée.');
+      throw new Error('Vous suivez déjà cet utilisateur.');
+    }
+  
+    console.log('Création du lien de suivi...');
     const follow = await this.prisma.userFollow.create({
       data: {
         followingId: userId,
-        followerId: followerId,
+        followerId,
       },
     });
-    // Créer une notification pour informer l'utilisateur qu'il a un nouveau follower
-    const follower = await this.prisma.user.findUnique({
-      where: { id: followerId },
-    });
-
-    // Ajoutez ici les valeurs des arguments `type` et `relatedId`
-    await this.notificationService.createNotification(
-      userId,
-      `${follower.username} vous suit maintenant.`,
-      'FOLLOW', // Exemple de valeur pour le type
-      follow.id // Par exemple, l'ID du suivi
-    );
+  
+    console.log('Lien de suivi créé avec succès, ajout de la notification...');
+    try {
+      const follower = await this.prisma.user.findUnique({
+        where: { id: followerId },
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          useFullName: true,
+        },
+      });
+  
+      if (!follower) {
+        console.log("L'utilisateur qui suit n'existe pas.");
+        throw new Error("L'utilisateur qui suit n'existe pas.");
+      }
+  
+      // Déterminer le nom à afficher en fonction de `useFullName`
+      const followerName = follower.useFullName
+        ? `${follower.firstName} ${follower.lastName}`
+        : follower.username || 'Un utilisateur';
+  
+      // Créer la notification avec `initiatorId`
+      await this.notificationService.createNotification(
+        userId, // Destinataire de la notification
+        `${followerName} vous suit maintenant.`,
+        'FOLLOW',
+        follower.id, // `relatedId`
+        follower.id // `initiatorId` (celui qui a initié l'action)
+      );
+      console.log('Notification créée avec succès.');
+    } catch (error) {
+      console.error('Erreur lors de la création de la notification :', error.message);
+    }
+  
+    console.log('Retour de la réponse...');
     return follow;
   }
 

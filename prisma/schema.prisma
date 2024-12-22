@@ -10,7 +10,6 @@ datasource db {
 model User {
   id                        Int                        @id @default(autoincrement())
   email                     String                     @unique
-  showEmail                 Boolean                    @default(false) // Nouveau champ  
   password                  String
   createdAt                 DateTime                   @default(now())
   refreshToken              String?
@@ -19,14 +18,15 @@ model User {
   trustRate                 Float?
   isSubscribed              Boolean                    @default(false)
   isMunicipality            Boolean                    @default(false)
-  nomCommune                String?   // Nom de la ville
-  codePostal                String?   // Code postal
   latitude                  Float?
   longitude                 Float?
   firstName                 String                     @default("Unknown")
   lastName                  String                     @default("Unknown")
   username                  String?                    @unique
-  useFullName              Boolean                    @default(true) // Nouveau champ
+  useFullName               Boolean                    @default(true)
+  showEmail                 Boolean                    @default(false)
+  codePostal                String?
+  nomCommune                String?
   attendedEvents            Attendee[]
   comments                  Comment[]
   organizedEvents           Event[]                    @relation("UserEvents")
@@ -34,7 +34,8 @@ model User {
   invites                   Invite[]
   likes                     Like[]
   messages                  Message[]                  @relation("UserMessages")
-  notifications             Notification[]
+  notifications             Notification[]             @relation("UserNotifications")
+  initiatedNotifications    Notification[]             @relation("NotificationInitiator") // Champ opposé
   notificationSubscriptions NotificationSubscription[]
   photos                    Photo[]
   posts                     Post[]
@@ -46,6 +47,20 @@ model User {
   conversations             Conversation[]             @relation("UserConversations")
 }
 
+model Notification {
+  id           Int      @id @default(autoincrement())
+  message      String
+  isRead       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  userId       Int
+  initiatorId  Int?     // Nouvel attribut pour l'initiateur de l'action
+  type         String
+  relatedId    Int
+  updatedAt    DateTime @updatedAt
+  user         User     @relation("UserNotifications", fields: [userId], references: [id])
+  initiator    User?    @relation("NotificationInitiator", fields: [initiatorId], references: [id])
+}
+
 model UserFollow {
   id          Int      @id @default(autoincrement())
   followerId  Int
@@ -55,6 +70,7 @@ model UserFollow {
   following   User     @relation("FollowerRelation", fields: [followingId], references: [id])
 
   @@unique([followerId, followingId])
+  @@index([followerId, followingId])
 }
 
 model Group {
@@ -82,12 +98,12 @@ model Report {
   city        String?
   downVotes   Int       @default(0)
   upVotes     Int       @default(0)
+  ranking     Int?
   comments    Comment[]
   photos      Photo[]
   event       Event?    @relation("EventReports", fields: [eventId], references: [id])
   user        User      @relation(fields: [userId], references: [id])
   votes       Vote[]
-  ranking     Int? 
 }
 
 model Vote {
@@ -120,14 +136,12 @@ model Comment {
   reportId  Int?
   userId    Int
   postId    Int?
-  parentId  Int?      // ID du commentaire parent (null pour les commentaires principaux)
-
+  parentId  Int?
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
   post      Post?     @relation(fields: [postId], references: [id])
   report    Report?   @relation(fields: [reportId], references: [id])
   user      User      @relation(fields: [userId], references: [id])
-
-  replies   Comment[] @relation("CommentReplies") // Pas d'onDelete ici
-  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade) // Ajout de onDelete ici
 }
 
 model Post {
@@ -166,11 +180,11 @@ model Event {
 model Photo {
   id        Int      @id @default(autoincrement())
   url       String   @unique
-  isProfile  Boolean @default(false) // Indique si c'est une photo de profil
   eventId   Int?
   createdAt DateTime @default(now())
   reportId  Int?
   userId    Int?
+  isProfile Boolean  @default(false)
   event     Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   report    Report?  @relation(fields: [reportId], references: [id], onDelete: Cascade)
   user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -214,18 +228,6 @@ model Message {
   conversationId Int
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   sender         User         @relation("UserMessages", fields: [senderId], references: [id])
-}
-
-model Notification {
-  id        Int      @id @default(autoincrement())
-  message   String
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  userId    Int
-  relatedId Int
-  type      String
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
 }
 
 model NotificationSubscription {

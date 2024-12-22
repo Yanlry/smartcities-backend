@@ -9,6 +9,8 @@ import {
   UseGuards,
   BadRequestException,
   NotFoundException,
+  ParseIntPipe,
+  HttpCode
 } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { Request } from 'express';
@@ -20,88 +22,32 @@ interface AuthenticatedRequest extends Request {
 
 @Controller('notifications')
 export class NotificationController {
-  constructor(private readonly notificationService: NotificationService) { }
+  constructor(private readonly notificationService: NotificationService) {}
 
-  // POST /notifications/create
+  // CRÉER UNE NOTIFICATION
   @Post('/create')
-  async create(@Body() notificationData: { userId: number, message: string, type: string, relatedId: number }) {
-    // Appeler la méthode createNotification du service
-    return this.notificationService.createNotification(notificationData.userId, notificationData.message, notificationData.type, notificationData.relatedId);
+  async create(@Body() notificationData: { userId: number; message: string; type: string; relatedId: number }) {
+    return this.notificationService.createNotification(
+      notificationData.userId,
+      notificationData.message,
+      notificationData.type,
+      notificationData.relatedId
+    );
   }
 
-  // POST /notifications/send (Envoi aux utilisateurs concernés)
-  @Post('/send')
-  async sendNotifications(
-    @Body() notificationData: { userId: number, message: string, type: string, relatedId: number }
-  ) {
-    // Récupérer les abonnés sauf l'utilisateur qui envoie la notification
-    const subscribers = await this.notificationService.getSubscribers(notificationData.userId);  // Utiliser le service pour obtenir les abonnés
-
-    // Envoyer une notification à chaque abonné
-    for (const subscriber of subscribers) {
-      await this.notificationService.createNotification(subscriber.userId, notificationData.message, notificationData.type, notificationData.relatedId);
-    }
-
-    return { message: 'Notifications envoyées' };
-  }
-
-  // S'ABONNER AUX NOTIFICATIONS PAR ZONE GEOGRAPHIQUE (VILLES, LATITUDE, LONGITUDE, RADIUS)
-  @UseGuards(JwtAuthGuard)
-  @Post('subscribe')
-  async subscribeToRegion(
-    @Req() request: AuthenticatedRequest,
-    @Body()
-    body: {
-      city?: string;
-      latitude?: number;
-      longitude?: number;
-      radius?: number;
-    }
-  ) {
-    const userId = request.user.id;
-    return this.notificationService.subscribeToRegion({ userId, ...body });
-  }
-
-  // RECUPERER LES ABONNEMENTS DE L'UTILISATEUR
-  @UseGuards(JwtAuthGuard)
-  @Get('subscriptions')
-  async getUserSubscriptions(@Req() request: AuthenticatedRequest) {
-    const userId = request.user.id;
-    return this.notificationService.getUserSubscriptions(userId);
-  }
-
-  // RECUPERER LES NOTIFICATIONS DE L'UTILISATEUR CONNECTE
   @UseGuards(JwtAuthGuard)
   @Get()
   async getNotifications(@Req() request: AuthenticatedRequest) {
     const userId = request.user.id;
-    return this.notificationService.getNotifications(userId);
+    return this.notificationService.getNotificationsWithInitiatorDetails(userId);
   }
 
-  // MARQUER UNE NOTIFICATION SPECIFIQUE COMME LUE
+  // MARQUER UNE NOTIFICATION COMME LUE
   @UseGuards(JwtAuthGuard)
   @Post(':id/mark-read')
-  async markNotificationAsRead(
-    @Param('id') notificationId: string, // Paramètre reçu en tant que chaîne
-    @Req() request: AuthenticatedRequest
-  ) {
+  async markNotificationAsRead(@Param('id', ParseIntPipe) notificationId: number, @Req() request: AuthenticatedRequest) {
     const userId = request.user.id;
-    const id = parseInt(notificationId, 10);
-    if (isNaN(id)) {
-      throw new BadRequestException("L'ID de la notification est invalide");
-    }
-
-    const notification = await this.notificationService.getNotificationById(id);
-    if (!notification) {
-      throw new NotFoundException('Notification introuvable');
-    }
-
-    if (notification.userId !== userId) {
-      throw new BadRequestException(
-        'Vous ne pouvez pas lire cette notification'
-      );
-    }
-    return this.notificationService.markNotificationAsRead(id);
+    return this.notificationService.markNotificationAsRead(notificationId);
   }
 
   // MARQUER TOUTES LES NOTIFICATIONS COMME LUES
@@ -112,21 +58,63 @@ export class NotificationController {
     return this.notificationService.markAllAsRead(userId);
   }
 
-  // SE DESABONNER D'UNE NOTIFICATION SPECIFIQUE PAR ID
   @UseGuards(JwtAuthGuard)
-  @Delete(':id')
-  async unsubscribeFromSpecific(
-    @Param('id') subscriptionId: number,
-    @Req() request: AuthenticatedRequest
-  ) {
+@Delete(':id')
+@HttpCode(204) // Code de réponse pour la suppression réussie
+async deleteNotification(@Param('id', ParseIntPipe) notificationId: number, @Req() request: AuthenticatedRequest) {
+  const userId = request.user.id;
+  await this.notificationService.deleteNotification(notificationId, userId);
+}
+
+  // RÉCUPÉRER LES NOTIFICATIONS NON LUES
+  @UseGuards(JwtAuthGuard)
+  @Get('unread')
+  async getUnreadNotifications(@Req() request: AuthenticatedRequest) {
     const userId = request.user.id;
-    return this.notificationService.unsubscribeFromSpecific(
-      subscriptionId,
-      userId
-    );
+    return this.notificationService.getUnreadNotifications(userId);
   }
 
-  // SE DESABONNER DES NOTIFICATIONS DE L'UTILISATEUR CONNECTE
+  @Get('unread/count')
+  @UseGuards(JwtAuthGuard)
+  async getUnreadCount(@Req() request: AuthenticatedRequest) {
+    console.log("Request.user :", request.user);
+    if (!request.user) {
+      throw new BadRequestException("Utilisateur non authentifié.");
+    }
+    const userId = request.user.id; // ID de l'utilisateur connecté
+    const count = await this.notificationService.getUnreadCount(userId);
+    return { count };
+  }
+  
+
+  // S'ABONNER AUX NOTIFICATIONS (PAR ZONE GÉOGRAPHIQUE)
+  @UseGuards(JwtAuthGuard)
+  @Post('subscribe')
+  async subscribeToRegion(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: { city?: string; latitude?: number; longitude?: number; radius?: number }
+  ) {
+    const userId = request.user.id;
+    return this.notificationService.subscribeToRegion({ userId, ...body });
+  }
+
+  // RÉCUPÉRER LES ABONNEMENTS DE L'UTILISATEUR
+  @UseGuards(JwtAuthGuard)
+  @Get('subscriptions')
+  async getUserSubscriptions(@Req() request: AuthenticatedRequest) {
+    const userId = request.user.id;
+    return this.notificationService.getUserSubscriptions(userId);
+  }
+
+  // SE DÉSABONNER D'UN ABONNEMENT
+  @UseGuards(JwtAuthGuard)
+  @Delete('subscriptions/:id')
+  async unsubscribeFromSpecific(@Param('id', ParseIntPipe) subscriptionId: number, @Req() request: AuthenticatedRequest) {
+    const userId = request.user.id;
+    return this.notificationService.unsubscribeFromSpecific(subscriptionId, userId);
+  }
+
+  // SE DÉSABONNER DE TOUS LES ABONNEMENTS
   @UseGuards(JwtAuthGuard)
   @Delete('unsubscribe')
   async unsubscribeFromNotifications(@Req() request: AuthenticatedRequest) {
@@ -134,3 +122,4 @@ export class NotificationController {
     return this.notificationService.unsubscribeFromNotifications(userId);
   }
 }
+

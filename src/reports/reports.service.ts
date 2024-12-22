@@ -3,7 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   InternalServerErrorException,
-  ForbiddenException
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
@@ -510,6 +510,7 @@ export class ReportService {
       downVotes,
     };
   }
+
   async getCommentsWithReplies(reportId: number) {
     const comments = await this.prisma.comment.findMany({
       where: { reportId, parentId: null },
@@ -546,40 +547,51 @@ export class ReportService {
         },
       },
     });
-  
+
     // Enrichir chaque commentaire avec `profilePhoto`
     return comments.map((comment) => ({
       ...comment,
       user: {
         ...comment.user,
-        profilePhoto: comment.user.photos.length > 0 ? comment.user.photos[0].url : null,
+        profilePhoto:
+          comment.user.photos.length > 0 ? comment.user.photos[0].url : null,
       },
       replies: comment.replies.map((reply) => ({
         ...reply,
         user: {
           ...reply.user,
-          profilePhoto: reply.user.photos.length > 0 ? reply.user.photos[0].url : null,
+          profilePhoto:
+            reply.user.photos.length > 0 ? reply.user.photos[0].url : null,
         },
       })),
     }));
   }
-  
 
   async commentOnReport(commentData: {
-    reportId?: number;
     userId: number;
+    reportId: number;
     text: string;
     parentId?: number;
   }) {
-    const { reportId, userId, text, parentId } = commentData;
+    const { userId, reportId, text, parentId } = commentData;
   
-    console.log("Données reçues pour le commentaire :", commentData);
+    if (!text || typeof text !== 'string' || text.trim() === '') {
+      throw new BadRequestException('Le contenu du commentaire est requis.');
+    }
+  
+    const report = await this.prisma.report.findUnique({
+      where: { id: reportId },
+    });
+  
+    if (!report) {
+      throw new NotFoundException('Signalement non trouvé.');
+    }
   
     const newComment = await this.prisma.comment.create({
       data: {
-        text,
-        reportId,
         userId,
+        reportId,
+        text,
         parentId,
       },
       include: {
@@ -599,14 +611,30 @@ export class ReportService {
       },
     });
   
-    console.log("Nouveau commentaire créé :", newComment);
+    const commenterName = newComment.user.useFullName
+      ? `${newComment.user.firstName} ${newComment.user.lastName}`
+      : newComment.user.username || 'Un utilisateur';
   
-    // Ajouter le champ `profilePhoto`
+    try {
+      if (report.userId !== userId) {
+        await this.notificationService.createNotification(
+          report.userId,
+          `${commenterName} a commenté votre signalement : "${text}"`,
+          'COMMENT',
+          reportId, // `relatedId`
+          userId // `initiatorId` (celui qui commente)
+        );
+      }
+    } catch (error) {
+      console.error('Erreur lors de la création de la notification :', error.message);
+    }
+  
     return {
       ...newComment,
       user: {
         ...newComment.user,
-        profilePhoto: newComment.user.photos.length > 0 ? newComment.user.photos[0].url : null,
+        profilePhoto:
+          newComment.user.photos.length > 0 ? newComment.user.photos[0].url : null,
       },
     };
   }
@@ -634,37 +662,40 @@ export class ReportService {
     longitude: number;
   }) {
     const { reportId, userId, type } = voteData;
-
+  
     try {
       if (!type || !['up', 'down'].includes(type)) {
         throw new BadRequestException('Type de vote invalide.');
       }
+  
       const report = await this.prisma.report.findUnique({
         where: { id: reportId },
       });
       if (!report) {
-        throw new NotFoundException(
-          `Signalement introuvable pour l'ID : ${reportId}`
-        );
+        throw new NotFoundException(`Signalement introuvable pour l'ID : ${reportId}`);
       }
-      const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (!user) {
-        throw new NotFoundException(
-          `Utilisateur introuvable pour l'ID : ${userId}`
-        );
-      }
-      const existingVote = await this.prisma.vote.findFirst({
-        where: {
-          reportId,
-          userId,
+  
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          firstName: true,
+          lastName: true,
+          username: true,
+          useFullName: true,
         },
       });
-
-      if (existingVote) {
-        throw new BadRequestException(
-          'Vous avez déjà voté pour ce signalement.'
-        );
+      if (!user) {
+        throw new NotFoundException(`Utilisateur introuvable pour l'ID : ${userId}`);
       }
+  
+      const existingVote = await this.prisma.vote.findFirst({
+        where: { reportId, userId },
+      });
+  
+      if (existingVote) {
+        throw new BadRequestException('Vous avez déjà voté pour ce signalement.');
+      }
+  
       const vote = await this.prisma.vote.create({
         data: {
           reportId,
@@ -672,6 +703,7 @@ export class ReportService {
           type,
         },
       });
+  
       const updatedReport = await this.prisma.report.update({
         where: { id: reportId },
         data: {
@@ -679,8 +711,29 @@ export class ReportService {
           downVotes: type === 'down' ? { increment: 1 } : undefined,
         },
       });
+  
       await this.updateUserTrustRate(userId);
-
+  
+      try {
+        if (report.userId !== userId) {
+          const voteTypeText = type === 'up' ? 'positif' : 'négatif';
+  
+          const voterName = user.useFullName
+            ? `${user.firstName} ${user.lastName}`
+            : user.username || 'Un utilisateur';
+  
+          await this.notificationService.createNotification(
+            report.userId,
+            `${voterName} a laissé un vote ${voteTypeText} sur votre signalement.`,
+            'VOTE',
+            reportId, // `relatedId`
+            userId // `initiatorId`
+          );
+        }
+      } catch (error) {
+        console.error('Erreur lors de la création de la notification :', error.message);
+      }
+  
       return {
         message: 'Vote enregistré avec succès',
         updatedVotes: {
@@ -689,39 +742,29 @@ export class ReportService {
         },
       };
     } catch (error) {
-      // Log des erreurs spécifiques pour un meilleur débogage
-      if (
-        error instanceof BadRequestException ||
-        error instanceof NotFoundException
-      ) {
-        console.error('Erreur métier :', error.message);
-      } else {
-        console.error('Erreur inattendue :', error);
-      }
-      throw new InternalServerErrorException(
-        "Erreur lors de l'enregistrement du vote"
-      );
+      console.error('Erreur inattendue :', error);
+      throw new InternalServerErrorException("Erreur lors de l'enregistrement du vote");
     }
   }
 
   async deleteComment(commentId: number, userId: number) {
     console.log(
-      "Suppression du commentaire:",
+      'Suppression du commentaire:',
       commentId,
       "par l'utilisateur:",
       userId
     );
-  
+
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
       include: { parent: true }, // Inclure le parent pour vérifier la relation
     });
-  
+
     if (!comment) {
-      console.log("Commentaire non trouvé.");
-      throw new NotFoundException("Commentaire introuvable.");
+      console.log('Commentaire non trouvé.');
+      throw new NotFoundException('Commentaire introuvable.');
     }
-  
+
     // Vérifiez si l'utilisateur est l'auteur du commentaire ou d'une réponse
     if (comment.userId !== userId) {
       console.log(
@@ -732,8 +775,8 @@ export class ReportService {
         "Vous n'êtes pas autorisé à supprimer ce commentaire ou cette réponse."
       );
     }
-  
-    console.log("Suppression du commentaire ou réponse réussie.");
+
+    console.log('Suppression du commentaire ou réponse réussie.');
     return this.prisma.comment.delete({ where: { id: commentId } });
   }
 
