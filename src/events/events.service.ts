@@ -180,11 +180,20 @@ export class EventsService {
                 username: true,
                 useFullName: true,
                 photos: {
-                  where: { isProfile: true }, // Facultatif : inclure uniquement la photo de profil
+                  where: { isProfile: true },
                   select: { url: true },
                 },
               },
             },
+          },
+        },
+        organizer: { // Ajout des informations de l'organisateur
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+            useFullName: true,
           },
         },
       },

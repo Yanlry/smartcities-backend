@@ -21,4 +21,11 @@ export class UpdateUserDto {
   @IsBoolean()
   showEmail?: boolean;
 
+  @IsOptional()
+  @IsString()
+  nomCommune?: string;
+
+  @IsOptional()
+  @IsString()
+  codePostal?: string;
 }

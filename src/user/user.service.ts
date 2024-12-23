@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, forwardRef , Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, forwardRef , Inject, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { S3Service } from 'src/services/s3/s3.service';
@@ -15,9 +15,17 @@ export class UserService {
   ) {}
 
 
-  async listTop10Smarter() {
-    // Récupérer tous les utilisateurs et leur nombre de votes
+  async listTop10Smarter(cityName: string) {
+    // Vérifier si la ville est spécifiée
+    if (!cityName) {
+      throw new BadRequestException("Le nom de la ville est requis.");
+    }
+  
+    // Récupérer les utilisateurs de la ville spécifiée et leur nombre de votes
     const users = await this.prisma.user.findMany({
+      where: {
+        nomCommune: cityName, // Filtrer par ville
+      },
       include: {
         votes: true, // Inclure les votes pour calculer le total
         photos: {
@@ -26,7 +34,7 @@ export class UserService {
         },
       },
     });
-
+  
     // Calculer le nombre de votes et trier
     const usersWithRanking = users
       .map((user) => ({
@@ -39,14 +47,14 @@ export class UserService {
         photo: user.photos[0]?.url || null,
       }))
       .sort((a, b) => b.voteCount - a.voteCount); // Trier par votes décroissants
-
+  
     // Ajouter les rangs à chaque utilisateur
     const usersWithRankingAndPosition = usersWithRanking.map((user, index) => ({
       ...user,
       ranking: index + 1, // Classement basé sur la position
     }));
-
-    // Retourner les 10 meilleurs utilisateurs
+  
+    // Retourner les 10 meilleurs utilisateurs de la ville
     return usersWithRankingAndPosition.slice(0, 10);
   }
 
@@ -125,32 +133,46 @@ export class UserService {
     };
   }
 
-  async getUserRanking(userId: number) {
-    // Étape 1 : Récupérer les utilisateurs classés par votes
+  async getUserRanking(userId: number, cityName: string) {
+    // Étape 1 : Récupérer les utilisateurs de la ville spécifiée
     const users = await this.prisma.user.findMany({
+      where: {
+        nomCommune: cityName, // Filtrer par ville
+      },
       include: {
-        votes: true, // Récupère les votes pour chaque utilisateur
+        votes: true, // Récupérer les votes pour chaque utilisateur
+        photos: {
+          where: { isProfile: true },
+          select: { url: true },
+        },
       },
     });
-
+  
     // Étape 2 : Calculer le nombre de votes pour chaque utilisateur
     const usersWithVoteCount = users.map((user) => ({
       id: user.id,
       username: user.username,
-      voteCount: user.votes.length, // Nombre total de votes
+      firstName: user.firstName,
+      lastName: user.lastName,
+      useFullName: user.useFullName,
+      voteCount: user.votes.length,
+      photo: user.photos[0]?.url || null, // Ajouter une photo par défaut si nécessaire
     }));
-
+  
     // Étape 3 : Trier par le nombre de votes (ordre décroissant)
     usersWithVoteCount.sort((a, b) => b.voteCount - a.voteCount);
-
+  
     // Étape 4 : Trouver le rang de l'utilisateur actuel
     const ranking =
       usersWithVoteCount.findIndex((user) => user.id === userId) + 1;
-
+  
     return {
       ranking,
       totalUsers: usersWithVoteCount.length,
-      users: usersWithVoteCount,
+      users: usersWithVoteCount.map((user, index) => ({
+        ...user,
+        ranking: index + 1, // Ajouter le classement
+      })),
     };
   }
 
@@ -292,15 +314,14 @@ export class UserService {
   }
 
   async updateUser(userId: number, data: UpdateUserDto) {
-    // Filtrer les champs invalides (si des champs non autorisés sont envoyés)
-    const { email, username, firstName, lastName } = data;
-
-    // Valider les champs si nécessaire
+    const { email, username, firstName, lastName, nomCommune, codePostal} = data;
+  
+    // Mise à jour de l'utilisateur avec les nouveaux champs
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
-      data: { email, username, firstName, lastName },
+      data: { email, username, firstName, lastName, nomCommune, codePostal},
     });
-
+  
     return updatedUser;
   }
 
@@ -377,11 +398,12 @@ export class UserService {
         comments: true, // Commentaires
         organizedEvents: true, // Événements organisés
         posts: true, // Publications
+        attendedEvents: true, // Événements auxquels l'utilisateur participe
       },
     });
-
+  
     if (!user) throw new NotFoundException('Utilisateur non trouvé');
-
+  
     return {
       numberOfReports: user.reports.length, // Nombre de signalements
       trustRate: user.trustRate || 0, // Taux de confiance
@@ -389,6 +411,7 @@ export class UserService {
       numberOfComments: user.comments.length, // Nombre de commentaires
       numberOfEventsCreated: user.organizedEvents.length, // Nombre d'événements créés
       numberOfPosts: user.posts.length, // Nombre de publications
+      numberOfEventsAttended: user.attendedEvents.length, // Nombre d'événements auxquels l'utilisateur participe
       votes: user.votes.map((vote) => ({
         type: vote.type,
         reportId: vote.reportId,

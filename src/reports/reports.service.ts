@@ -389,6 +389,9 @@ export class ReportService {
           select: {
             id: true,
             username: true,
+            useFullName: true, // Ajout
+            firstName: true, // Ajout
+            lastName: true,
           },
         },
         type: true,
@@ -574,19 +577,19 @@ export class ReportService {
     parentId?: number;
   }) {
     const { userId, reportId, text, parentId } = commentData;
-  
+
     if (!text || typeof text !== 'string' || text.trim() === '') {
       throw new BadRequestException('Le contenu du commentaire est requis.');
     }
-  
+
     const report = await this.prisma.report.findUnique({
       where: { id: reportId },
     });
-  
+
     if (!report) {
       throw new NotFoundException('Signalement non trouvé.');
     }
-  
+
     const newComment = await this.prisma.comment.create({
       data: {
         userId,
@@ -610,11 +613,11 @@ export class ReportService {
         },
       },
     });
-  
+
     const commenterName = newComment.user.useFullName
       ? `${newComment.user.firstName} ${newComment.user.lastName}`
       : newComment.user.username || 'Un utilisateur';
-  
+
     try {
       if (report.userId !== userId) {
         await this.notificationService.createNotification(
@@ -626,15 +629,20 @@ export class ReportService {
         );
       }
     } catch (error) {
-      console.error('Erreur lors de la création de la notification :', error.message);
+      console.error(
+        'Erreur lors de la création de la notification :',
+        error.message
+      );
     }
-  
+
     return {
       ...newComment,
       user: {
         ...newComment.user,
         profilePhoto:
-          newComment.user.photos.length > 0 ? newComment.user.photos[0].url : null,
+          newComment.user.photos.length > 0
+            ? newComment.user.photos[0].url
+            : null,
       },
     };
   }
@@ -662,19 +670,21 @@ export class ReportService {
     longitude: number;
   }) {
     const { reportId, userId, type } = voteData;
-  
+
     try {
       if (!type || !['up', 'down'].includes(type)) {
         throw new BadRequestException('Type de vote invalide.');
       }
-  
+
       const report = await this.prisma.report.findUnique({
         where: { id: reportId },
       });
       if (!report) {
-        throw new NotFoundException(`Signalement introuvable pour l'ID : ${reportId}`);
+        throw new NotFoundException(
+          `Signalement introuvable pour l'ID : ${reportId}`
+        );
       }
-  
+
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -685,17 +695,21 @@ export class ReportService {
         },
       });
       if (!user) {
-        throw new NotFoundException(`Utilisateur introuvable pour l'ID : ${userId}`);
+        throw new NotFoundException(
+          `Utilisateur introuvable pour l'ID : ${userId}`
+        );
       }
-  
+
       const existingVote = await this.prisma.vote.findFirst({
         where: { reportId, userId },
       });
-  
+
       if (existingVote) {
-        throw new BadRequestException('Vous avez déjà voté pour ce signalement.');
+        throw new BadRequestException(
+          'Vous avez déjà voté pour ce signalement.'
+        );
       }
-  
+
       const vote = await this.prisma.vote.create({
         data: {
           reportId,
@@ -703,7 +717,7 @@ export class ReportService {
           type,
         },
       });
-  
+
       const updatedReport = await this.prisma.report.update({
         where: { id: reportId },
         data: {
@@ -711,17 +725,17 @@ export class ReportService {
           downVotes: type === 'down' ? { increment: 1 } : undefined,
         },
       });
-  
+
       await this.updateUserTrustRate(userId);
-  
+
       try {
         if (report.userId !== userId) {
           const voteTypeText = type === 'up' ? 'positif' : 'négatif';
-  
+
           const voterName = user.useFullName
             ? `${user.firstName} ${user.lastName}`
             : user.username || 'Un utilisateur';
-  
+
           await this.notificationService.createNotification(
             report.userId,
             `${voterName} a laissé un vote ${voteTypeText} sur votre signalement.`,
@@ -731,9 +745,12 @@ export class ReportService {
           );
         }
       } catch (error) {
-        console.error('Erreur lors de la création de la notification :', error.message);
+        console.error(
+          'Erreur lors de la création de la notification :',
+          error.message
+        );
       }
-  
+
       return {
         message: 'Vote enregistré avec succès',
         updatedVotes: {
@@ -743,7 +760,9 @@ export class ReportService {
       };
     } catch (error) {
       console.error('Erreur inattendue :', error);
-      throw new InternalServerErrorException("Erreur lors de l'enregistrement du vote");
+      throw new InternalServerErrorException(
+        "Erreur lors de l'enregistrement du vote"
+      );
     }
   }
 

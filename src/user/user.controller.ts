@@ -13,7 +13,7 @@ import {
   UploadedFiles,
   UseGuards,
   NotFoundException,
-  HttpStatus
+  HttpStatus,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -30,8 +30,7 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly s3Service: S3Service,
-    private readonly prisma: PrismaService  
-
+    private readonly prisma: PrismaService
   ) {}
 
   // LISTE LES UTILISATEURS AVEC DES FILTRES OPTIONNELS
@@ -45,24 +44,31 @@ export class UserController {
     return this.userService.listAllUsersByRanking();
   }
 
-  @Get('ranking')
-  async getUserRanking(@Query('userId') userId: number) {
-    return this.userService.getUserRanking(userId);
+  @Get('ranking-by-city')
+  async getRankingByCity(
+    @Query('userId') userId: number,
+    @Query('cityName') cityName: string
+  ) {
+    if (!cityName) {
+      throw new BadRequestException('Le nom de la ville est requis.');
+    }
+
+    return this.userService.getUserRanking(userId, cityName);
   }
 
-  // Récupère les 10 utilisateurs les plus récents avec leur photo de profil
-  @Get('top10')
-  async getTop10Smarter() {
-    try {
-      const users = await this.userService.listTop10Smarter(); // Appel au service
-      return users; // Retourne directement les utilisateurs
-    } catch (error) {
-      throw new HttpException(
-        'Erreur lors de la récupération des utilisateurs',
-        500
-      );
-    }
+  @Get('ranking')
+  async getUserRanking(
+    @Query('userId') userId: number,
+    @Query('cityName') cityName: string
+  ) {
+    return this.userService.getUserRanking(userId, cityName);
   }
+
+  @Get('top10')
+  async getTop10ByCity(@Query('cityName') cityName: string) {
+    return this.userService.listTop10Smarter(cityName);
+  }
+
   @Put('display-preference')
   async updateDisplayPreference(
     @Body() { userId, useFullName }: { userId: number; useFullName: boolean }
@@ -71,24 +77,24 @@ export class UserController {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
-  
+
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
-  
+
     // Met à jour la préférence
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: { useFullName },
     });
-  
+
     return updatedUser; // Retourne l'utilisateur mis à jour
   }
-  
+
   @Post('show-email')
-async updateShowEmail(@Body() body: { userId: number; showEmail: boolean }) {
-  return this.userService.updateEmailVisibility(body.userId, body.showEmail);
-}
+  async updateShowEmail(@Body() body: { userId: number; showEmail: boolean }) {
+    return this.userService.updateEmailVisibility(body.userId, body.showEmail);
+  }
 
   // RÉCUPÈRE LE PROFIL D'UN UTILISATEUR PAR SON ID
   @Get(':id')
@@ -149,40 +155,40 @@ async updateShowEmail(@Body() body: { userId: number; showEmail: boolean }) {
     return this.userService.getUserWithFollowers(Number(userId));
   }
 
- // SUIVRE UN UTILISATEUR
-@Post(':id/follow')
-async followUser(
-  @Param('id') userId: string,
-  @Body('followerId') followerId: number
-) {
-  try {
-    // Appelle le service pour effectuer le suivi
-    const follow = await this.userService.followUser(+userId, followerId);
+  // SUIVRE UN UTILISATEUR
+  @Post(':id/follow')
+  async followUser(
+    @Param('id') userId: string,
+    @Body('followerId') followerId: number
+  ) {
+    try {
+      // Appelle le service pour effectuer le suivi
+      const follow = await this.userService.followUser(+userId, followerId);
 
-    // Retourne une réponse de succès
-    return {
-      success: true,
-      message: 'Utilisateur suivi avec succès.',
-      data: follow,
-    };
-  } catch (error) {
-    // Log de l'erreur
-    console.error('Erreur lors du suivi de l\'utilisateur :', error.message);
+      // Retourne une réponse de succès
+      return {
+        success: true,
+        message: 'Utilisateur suivi avec succès.',
+        data: follow,
+      };
+    } catch (error) {
+      // Log de l'erreur
+      console.error("Erreur lors du suivi de l'utilisateur :", error.message);
 
-    // Gestion des erreurs en fonction du type d'exception
-    if (error instanceof NotFoundException) {
-      throw new NotFoundException(error.message);
-    } else if (error instanceof BadRequestException) {
-      throw new BadRequestException(error.message);
+      // Gestion des erreurs en fonction du type d'exception
+      if (error instanceof NotFoundException) {
+        throw new NotFoundException(error.message);
+      } else if (error instanceof BadRequestException) {
+        throw new BadRequestException(error.message);
+      }
+
+      // Erreur générique
+      throw new HttpException(
+        "Une erreur interne s'est produite lors du suivi.",
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
-
-    // Erreur générique
-    throw new HttpException(
-      'Une erreur interne s\'est produite lors du suivi.',
-      HttpStatus.INTERNAL_SERVER_ERROR
-    );
   }
-}
 
   // UNFOLLOW UN UTILISATEUR
   @Delete(':id/unfollow')
@@ -193,7 +199,6 @@ async followUser(
     return this.userService.unfollowUser(+userId, followerId);
   }
 
-  // MET À JOUR LES INFORMATIONS DE PROFIL D'UN UTILISATEUR ET SON TRUST RATE
   @Put(':id')
   async updateUser(
     @Param('id') id: string,
@@ -201,14 +206,10 @@ async followUser(
   ) {
     const userId = parseInt(id, 10);
     if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
-
-    // Premièrement, met à jour les informations générales
-    await this.userService.updateUser(userId, updateUserData);
-
-    // Puis, met à jour le trustRate
-    await this.userService.updateUserTrustRate(userId);
-
-    return { message: 'Profil mis à jour avec succès' };
+  
+    const updatedUser = await this.userService.updateUser(userId, updateUserData);
+  
+    return { message: 'Profil mis à jour avec succès', user: updatedUser };
   }
 
   @Put(':id/change-password')
