@@ -131,20 +131,28 @@ export class NotificationService {
     userId: number,
     message: string,
     type: string,
-    relatedId: number,
-    initiatorId?: number // Ajout du cinquième paramètre
-  ) {
-    return this.prisma.notification.create({
-      data: {
-        userId,
-        message,
-        isRead: false,
-        type,
-        relatedId,
-        initiatorId, // Inclure initiatorId dans la notification
-      },
-    });
-  }
+    relatedId: number | string, // Permettre les deux types pour plus de flexibilité
+    initiatorId?: number
+) {
+    try {
+        console.log('Création d\'une notification avec les données :', { userId, message, type, relatedId, initiatorId });
+        const notification = await this.prisma.notification.create({
+            data: {
+                userId,
+                message,
+                isRead: false,
+                type,
+                relatedId: String(relatedId), // Convertir en chaîne
+                initiatorId,
+            },
+        });
+        console.log('Notification créée dans la base de données :', notification);
+        return notification;
+    } catch (error) {
+        console.error('Erreur Prisma lors de la création de la notification :', error);
+        throw new Error('Erreur lors de la création de la notification');
+    }
+}
 
   async updateReportOrEventAndNotify(
     type: 'report' | 'event',

@@ -24,16 +24,25 @@ interface AuthenticatedRequest extends Request {
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
-  // CRÉER UNE NOTIFICATION
   @Post('/create')
-  async create(@Body() notificationData: { userId: number; message: string; type: string; relatedId: number }) {
-    return this.notificationService.createNotification(
-      notificationData.userId,
-      notificationData.message,
-      notificationData.type,
-      notificationData.relatedId
-    );
-  }
+async create(@Body() notificationData: { userId: number; message: string; type: string; relatedId: string, initiatorId?: number }) {
+    console.log('Données reçues pour créer une notification :', notificationData);
+
+    try {
+        const notification = await this.notificationService.createNotification(
+            notificationData.userId,
+            notificationData.message,
+            notificationData.type,
+            notificationData.relatedId, // Aucune conversion nécessaire, c'est déjà une chaîne
+            notificationData.initiatorId
+        );
+        console.log('Notification créée avec succès :', notification);
+        return notification;
+    } catch (error) {
+        console.error('Erreur lors de la création de la notification :', error);
+        throw error;
+    }
+}
 
   @UseGuards(JwtAuthGuard)
   @Get()

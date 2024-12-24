@@ -55,7 +55,7 @@ model Notification {
   userId       Int
   initiatorId  Int?     // Nouvel attribut pour l'initiateur de l'action
   type         String
-  relatedId    Int
+  relatedId    String
   updatedAt    DateTime @updatedAt
   user         User     @relation("UserNotifications", fields: [userId], references: [id])
   initiator    User?    @relation("NotificationInitiator", fields: [initiatorId], references: [id])
