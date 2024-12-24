@@ -177,6 +177,7 @@ export class UserService {
   }
 
   async getUserById(userId: number) {
+    // Récupérer les informations de l'utilisateur
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -230,11 +231,32 @@ export class UserService {
         },
       },
     });
-
+  
     if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé5');
+      throw new NotFoundException('Utilisateur non trouvé');
     }
-
+  
+    // Récupérer les utilisateurs de la même ville
+    const usersInCity = await this.prisma.user.findMany({
+      where: { nomCommune: user.nomCommune },
+      include: {
+        votes: true, // Inclure les votes pour calculer le nombre de votes
+      },
+    });
+  
+    // Calculer le classement par nombre de votes
+    const usersWithVoteCount = usersInCity.map((u) => ({
+      id: u.id,
+      voteCount: u.votes.length,
+    }));
+  
+    // Trier par le nombre de votes (ordre décroissant)
+    usersWithVoteCount.sort((a, b) => b.voteCount - a.voteCount);
+  
+    // Trouver le classement de l'utilisateur
+    const ranking =
+      usersWithVoteCount.findIndex((u) => u.id === userId) + 1;
+  
     return {
       ...user,
       email: user.showEmail ? user.email : null,
@@ -249,6 +271,7 @@ export class UserService {
         username: f.following.username,
         profilePhoto: f.following.photos[0]?.url || null,
       })),
+      ranking, // Ajout du classement
     };
   }
 

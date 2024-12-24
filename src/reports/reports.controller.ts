@@ -81,12 +81,13 @@ export class ReportController {
   async listCategories() {
     return this.reportService.listCategories();
   }
-
-   // Route : Obtenir les statistiques par catégorie
-   @Get('statistics')
-   async getStatisticsByCategory() {
-     return await this.reportService.getStatisticsByCategory();
-   }
+  @Get('statistics')
+  async getStatisticsByCategory(@Query('nomCommune') nomCommune: string) {
+    if (!nomCommune) {
+      throw new BadRequestException('Le champ nomCommune est requis.');
+    }
+    return await this.reportService.getStatisticsByCategoryForCity(nomCommune);
+  }
 
   @Get(':id')
   async getReportById(

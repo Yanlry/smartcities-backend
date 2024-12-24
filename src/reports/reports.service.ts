@@ -247,14 +247,20 @@ export class ReportService {
     ];
   }
   // SERVICE : Récupère les statistiques des signalements par catégorie
-  async getStatisticsByCategory() {
+  async getStatisticsByCategoryForCity(nomCommune: string) {
     const statistics = await this.prisma.report.groupBy({
       by: ['type'], // Regroupe par type (catégorie)
       _count: {
         type: true, // Compte le nombre de chaque type
       },
+      where: {
+        city: {
+          contains: nomCommune, // Vérifie que la ville correspond à la commune
+          mode: 'insensitive', // Rendre la recherche insensible à la casse
+        },
+      },
     });
-
+  
     // Formate les données pour le frontend
     return statistics.map((stat) => ({
       label: stat.type,
