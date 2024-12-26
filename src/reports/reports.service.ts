@@ -138,14 +138,117 @@ export class ReportService {
     return report;
   }
 
+  // async listReports(filters: any) {
+  //   const { latitude, longitude, radiusKm, ...otherFilters } = filters;
+
+  //   let where: any = { ...otherFilters };
+
+  //   if (latitude && longitude && radiusKm) {
+  //     const radiusInDegrees = Number(radiusKm) / 111;
+
+  //     where.latitude = {
+  //       gte: Number(latitude) - radiusInDegrees,
+  //       lte: Number(latitude) + radiusInDegrees,
+  //     };
+  //     where.longitude = {
+  //       gte: Number(longitude) - radiusInDegrees,
+  //       lte: Number(longitude) + radiusInDegrees,
+  //     };
+  //   }
+
+  //   const reports = await this.prisma.report.findMany({
+  //     where,
+  //     select: {
+  //       id: true,
+  //       title: true,
+  //       description: true,
+  //       createdAt: true,
+  //       updatedAt: true,
+  //       userId: true,
+  //       city: true,
+  //       type: true,
+  //       latitude: true,
+  //       longitude: true,
+  //       votes: {
+  //         select: {
+  //           type: true,
+  //         },
+  //       },
+  //       photos: {
+  //         select: {
+  //           id: true,
+  //           url: true,
+  //         },
+  //       },
+  //     },
+  //   });
+
+  //   const calculateDistance = (
+  //     lat1: number,
+  //     lon1: number,
+  //     lat2: number,
+  //     lon2: number
+  //   ): number => {
+  //     if (lat1 == null || lon1 == null || lat2 == null || lon2 == null)
+  //       return Infinity;
+  //     const toRadians = (degree: number) => (degree * Math.PI) / 180;
+  //     const R = 6371;
+  //     const dLat = toRadians(lat2 - lat1);
+  //     const dLon = toRadians(lon2 - lon1);
+  //     const a =
+  //       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+  //       Math.cos(toRadians(lat1)) *
+  //         Math.cos(toRadians(lat2)) *
+  //         Math.sin(dLon / 2) *
+  //         Math.sin(dLon / 2);
+  //     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  //     return R * c;
+  //   };
+
+  //   const reportsWithDistances = await Promise.all(
+  //     reports.map(async (report) => {
+  //       const distance = calculateDistance(
+  //         Number(latitude),
+  //         Number(longitude),
+  //         report.latitude,
+  //         report.longitude
+  //       );
+
+  //       const upVotes = report.votes.filter(
+  //         (vote) => vote.type === 'up'
+  //       ).length;
+  //       const downVotes = report.votes.filter(
+  //         (vote) => vote.type === 'down'
+  //       ).length;
+
+  //       const trustRate = await this.calculateTrustRate(report.userId);
+
+  //       return {
+  //         ...report,
+  //         distance,
+  //         upVotes,
+  //         downVotes,
+  //         trustRate,
+  //         photos: report.photos,
+  //       };
+  //     })
+  //   );
+
+  //   return reportsWithDistances.sort((a, b) => a.distance - b.distance);
+  // }
+
   async listReports(filters: any) {
-    const { latitude, longitude, radiusKm, ...otherFilters } = filters;
-
+    const { latitude, longitude, radiusKm, userId, ...otherFilters } = filters;
+  
     let where: any = { ...otherFilters };
-
+  
+    if (userId) {
+      where.userId = Number(userId);
+    }
+  
     if (latitude && longitude && radiusKm) {
       const radiusInDegrees = Number(radiusKm) / 111;
-
+  
       where.latitude = {
         gte: Number(latitude) - radiusInDegrees,
         lte: Number(latitude) + radiusInDegrees,
@@ -155,7 +258,7 @@ export class ReportService {
         lte: Number(longitude) + radiusInDegrees,
       };
     }
-
+  
     const reports = await this.prisma.report.findMany({
       where,
       select: {
@@ -182,7 +285,7 @@ export class ReportService {
         },
       },
     });
-
+  
     const calculateDistance = (
       lat1: number,
       lon1: number,
@@ -204,7 +307,7 @@ export class ReportService {
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     };
-
+  
     const reportsWithDistances = await Promise.all(
       reports.map(async (report) => {
         const distance = calculateDistance(
@@ -213,16 +316,16 @@ export class ReportService {
           report.latitude,
           report.longitude
         );
-
+  
         const upVotes = report.votes.filter(
           (vote) => vote.type === 'up'
         ).length;
         const downVotes = report.votes.filter(
           (vote) => vote.type === 'down'
         ).length;
-
+  
         const trustRate = await this.calculateTrustRate(report.userId);
-
+  
         return {
           ...report,
           distance,
@@ -233,7 +336,7 @@ export class ReportService {
         };
       })
     );
-
+  
     return reportsWithDistances.sort((a, b) => a.distance - b.distance);
   }
 
