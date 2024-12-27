@@ -87,8 +87,11 @@ export class EventsService {
     });
   }
 
-  async findAll() {
+  async findAll(userId?: string) {
+    const filter = userId ? { organizerId: parseInt(userId) } : {};
+  
     return this.prisma.event.findMany({
+      where: filter,
       select: {
         id: true,
         title: true,
@@ -97,7 +100,7 @@ export class EventsService {
         location: true,
         latitude: true,
         longitude: true,
-        photos: true, // Inclure les photos de l'événement
+        photos: true,
         createdAt: true,
         updatedAt: true,
         organizerId: true,

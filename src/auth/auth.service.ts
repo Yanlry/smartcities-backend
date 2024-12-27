@@ -107,48 +107,53 @@ export class AuthService {
 
   // AUTHENTIFIE L'UTILISATEUR ET RETOURNE UN ACCESS TOKEN ET UN REFRESH TOKEN SI LES IDENTIFIANTS SONT VALIDES
   async login(email: string, password: string) {
-    // Vérification de l'utilisateur
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !(await compare(password, user.password))) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
-
+  
     // Génération des tokens
     const payload = { userId: user.id, email: user.email };
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' }); // TOKEN D'ACCÈS VALIDE 15 MINUTES
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '30d' }); // TOKEN DE RAFRAÎCHISSEMENT VALIDE 30 JOURS
-
-    // Hachage et stockage du refresh token
+    const accessToken = this.jwtService.sign(payload, { expiresIn: process.env.JWT_ACCESS_EXPIRY || '15m' });
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: process.env.JWT_REFRESH_EXPIRY || '30d' });
+  
+    // Hachage et stockage du refresh token (remplace l'ancien)
     const hashedRefreshToken = await hash(refreshToken, 10);
     await this.prisma.user.update({
       where: { id: user.id },
       data: { refreshToken: hashedRefreshToken },
     });
-
-    // Retour de l'ID utilisateur et des tokens
+  
     return {
       message: 'Connexion réussie',
       accessToken,
       refreshToken,
-      userId: user.id, // Ajout explicite du userId dans la réponse
+      userId: user.id,
     };
   }
 
-  // VÉRIFIE ET RÉGÉNÈRE UN NOUVEAU ACCESS TOKEN UTILISANT UN REFRESH TOKEN VALIDE
   async refreshToken(userId: number, refreshToken: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (
-      !user ||
-      !user.refreshToken ||
-      !(await compare(refreshToken, user.refreshToken))
-    ) {
+  
+    if (!user || !user.refreshToken || !(await compare(refreshToken, user.refreshToken))) {
       throw new UnauthorizedException('Refresh token invalide');
     }
-
+  
     const payload = { userId: user.id, email: user.email };
-    const newAccessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
-
-    return { accessToken: newAccessToken };
+  
+    // Générer un nouveau token d'accès
+    const newAccessToken = this.jwtService.sign(payload, { expiresIn: process.env.JWT_ACCESS_EXPIRY || '15m' });
+  
+    // Optionnel : Générer un nouveau refresh token
+    const newRefreshToken = this.jwtService.sign(payload, { expiresIn: process.env.JWT_REFRESH_EXPIRY || '30d' });
+    const hashedRefreshToken = await hash(newRefreshToken, 10);
+  
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { refreshToken: hashedRefreshToken },
+    });
+  
+    return { accessToken: newAccessToken, refreshToken: newRefreshToken };
   }
 
   async forgotPassword(email: string) {

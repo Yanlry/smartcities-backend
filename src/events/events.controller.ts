@@ -96,8 +96,8 @@ export class EventsController {
   }
 
   @Get()
-  findAll() {
-    return this.eventsService.findAll();
+  findAll(@Query('userId') userId?: string) {
+    return this.eventsService.findAll(userId);
   }
 
   @Get(':eventId/is-registered')
@@ -166,24 +166,24 @@ export class EventsController {
   }
 
   // SUPPRIME UN ÉVÉNEMENT
-  @Delete(':id')
-  async removeEvent(@Param('id') id: string, @Body('userId') userId: number) {
-    const eventId = parseInt(id, 10);
-    return this.eventsService.remove(eventId, userId);
-  }
+// events.controller.ts
+@Delete(':id')
+remove(@Param('id') id: number, @Query('userId') userId: number) {
+  return this.eventsService.remove(id, userId);
+}
 
   @Delete(':eventId/leave')
-async leaveEvent(
-  @Param('eventId') eventId: number,
-  @Body('userId') userId: number
-) {
-  try {
-    const result = await this.eventsService.leaveEvent(eventId, userId);
-    return { message: 'Désinscription réussie.', result };
-  } catch (error) {
-    throw new BadRequestException(
-      `Erreur lors de la désinscription de l'événement : ${error.message}`
-    );
+  async leaveEvent(
+    @Param('eventId') eventId: number,
+    @Body('userId') userId: number
+  ) {
+    try {
+      const result = await this.eventsService.leaveEvent(eventId, userId);
+      return { message: 'Désinscription réussie.', result };
+    } catch (error) {
+      throw new BadRequestException(
+        `Erreur lors de la désinscription de l'événement : ${error.message}`
+      );
+    }
   }
-}
 }

@@ -117,6 +117,30 @@ async signup(
     return this.authService.login(email, password);
   }
 
+  @Get('verify-token')
+  @UseGuards(JwtAuthGuard)
+  async verifyToken(@Req() req: Request, @Res() res: Response) {
+    try {
+      // Si tout va bien, le token est valide
+      return res.status(HttpStatus.OK).json({ message: 'Token valide' });
+    } catch (error) {
+      // Si le token est expiré, retournez une erreur explicite
+      if (error.name === 'TokenExpiredError') {
+        throw new UnauthorizedException('Token expiré. Veuillez renouveler le token.');
+      }
+      throw new UnauthorizedException('Token invalide.');
+    }
+  }
+  
+    // GÉNÈRE UN NOUVEAU TOKEN D'ACCÈS UTILISANT LE TOKEN DE RAFRAÎCHISSEMENT FOURNI, PROLONGEANT LA SESSION
+    @Post('refresh-token')
+    async refreshToken(
+      @Body('userId') userId: number,
+      @Body('refreshToken') refreshToken: string
+    ) {
+      return this.authService.refreshToken(userId, refreshToken);
+    }
+
   // ENVOIE UN EMAIL AVEC UN LIEN ET UN TOKEN DE RÉINITIALISATION POUR REINITIALISER LE MOT DE PASSE
   @Post('forgot-password')
   async forgotPassword(@Body('email') email: string) {
@@ -137,21 +161,7 @@ async signup(
     return this.authService.resetPassword(resetToken, newPassword);
   }
 
-  // VÉRIFIE LA VALIDITÉ DU TOKEN D'ACCÈS DE L'UTILISATEUR, INDIQUANT SI LA SESSION EST TOUJOURS VALIDE
-  @Get('verify-token')
-  @UseGuards(JwtAuthGuard)
-  async verifyToken(@Req() req: Request, @Res() res: Response) {
-    return res.status(HttpStatus.OK).json({ message: 'Token valide' });
-  }
 
-  // GÉNÈRE UN NOUVEAU TOKEN D'ACCÈS UTILISANT LE TOKEN DE RAFRAÎCHISSEMENT FOURNI, PROLONGEANT LA SESSION
-  @Post('refresh-token')
-  async refreshToken(
-    @Body('userId') userId: number,
-    @Body('refreshToken') refreshToken: string
-  ) {
-    return this.authService.refreshToken(userId, refreshToken);
-  }
 
   @Get('me')
   async getMe(@Req() req: Request) {
