@@ -32,9 +32,12 @@ export class PostsController {
     }
 
     // AJOUTE OU SUPPRIME UN LIKE À UNE PUBLICATION ET MET À JOUR LE TRUSTRATE
-    @Post('like')
-    async toggleLike(@Body() likeData: { postId: number, userId: number }) {
-        return this.postsService.toggleLike(likeData.postId, likeData.userId);
+    @Post(':postId/like')
+    async toggleLike(
+      @Param('postId') postId: number,
+      @Body('userId') userId: number
+    ) {
+      return this.postsService.toggleLike(postId, userId);
     }
 
     // SUPPRIME UNE PUBLICATION

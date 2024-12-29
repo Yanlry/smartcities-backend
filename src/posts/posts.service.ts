@@ -14,7 +14,17 @@ export class PostsService {
 
   // CRÉER UNE NOUVELLE PUBLICATION
   async createPost(createPostDto: CreatePostDto) {
-    const post = await this.prisma.post.create({ data: createPostDto });
+    const post = await this.prisma.post.create({
+      data: {
+        content: createPostDto.content,
+        author: {
+          connect: { id: createPostDto.authorId }, // Utilisez `connect` pour lier l'auteur
+        },
+        latitude: createPostDto.latitude,
+        longitude: createPostDto.longitude,
+      },
+    });
+  
     // Notifier les abonnés de l'auteur de la publication
     const followers = await this.prisma.user.findMany({
       where: {
@@ -24,16 +34,17 @@ export class PostsService {
       },
       select: { id: true },
     });
-    // Notifier les abonnés de l'auteur de la publication
-    const notificationMessage = `Nouvelle publication de l'utilisateur ID ${createPostDto.authorId}`;
+  
+    const notificationMessage = `Nouvelle publication de ${createPostDto.authorId}`;
     for (const follower of followers) {
       await this.notificationService.createNotification(
-        follower.id,                // userId (l'abonné)
-        notificationMessage,         // message (le message à envoyer)
-        "post",                      // type (type de notification ici "post" pour la publication)
-        post.id                      // relatedId (l'ID du post concerné)
+        follower.id,               // ID de l'abonné
+        notificationMessage,       // Message de notification
+        "post",                    // Type de notification
+        post.id                    // ID du post concerné
       );
     }
+  
     return post;
   }
 
@@ -42,13 +53,30 @@ export class PostsService {
     const posts = await this.prisma.post.findMany({
       where: filters,
       include: {
-        likes: true, // Inclut les likes pour chaque publication
+        likes: true,
+        author: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            useFullName: true,
+            photos: {
+              where: { isProfile: true },
+              select: { url: true },
+            },
+          },
+        },
       },
     });
 
     return posts.map((post) => ({
       ...post,
-      likesCount: post.likes.length, // Compte le nombre de likes
+      likesCount: post.likes.length,
+      authorName: post.author.useFullName
+        ? `${post.author.firstName} ${post.author.lastName}`
+        : post.author.username || 'Utilisateur inconnu',
+      profilePhoto: post.author.photos[0]?.url || null,
     }));
   }
 

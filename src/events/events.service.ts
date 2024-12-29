@@ -19,55 +19,65 @@ export class EventsService {
   ) {}
 
   // events.service.ts
-  async create(data: CreateEventDto, photoUrls: string[]) {
-    console.log('Photo URLs received in create service:', photoUrls);
+// events.service.ts
+async create(data: CreateEventDto, photoUrls: string[]) {
+  console.log('Photo URLs received in create service:', photoUrls);
 
-    if (!photoUrls || photoUrls.length === 0) {
-      throw new BadRequestException('No valid photo URLs provided');
-    }
-
-    // Conversion des coordonnées
-    const latitude = parseFloat(data.latitude.toString());
-    const longitude = parseFloat(data.longitude.toString());
-    const organizerId = parseInt(data.organizerId.toString(), 10);
-
-    if (isNaN(latitude) || isNaN(longitude) || isNaN(organizerId)) {
-      throw new BadRequestException(
-        'Latitude, longitude, and organizerId must be valid numbers'
-      );
-    }
-
-    // Création de l'événement
-    const event = await this.prisma.event.create({
-      data: {
-        title: data.title,
-        description: data.description,
-        date: new Date(data.date),
-        location: data.location,
-        latitude,
-        longitude,
-        organizer: { connect: { id: organizerId } },
-      },
-    });
-
-    console.log('Event created in database:', event);
-
-    // Ajout des photos à l'événement
-    if (photoUrls.length > 0) {
-      const photosData = photoUrls.map((url) => ({
-        url,
-        eventId: event.id,
-      }));
-
-      console.log('Photos to associate with event:', photosData);
-
-      await this.prisma.photo.createMany({
-        data: photosData,
-      });
-    }
-
-    return event;
+  if (!photoUrls || photoUrls.length === 0) {
+    throw new BadRequestException('No valid photo URLs provided');
   }
+
+  // Conversion des coordonnées
+  const latitude = parseFloat(data.latitude.toString());
+  const longitude = parseFloat(data.longitude.toString());
+  const organizerId = parseInt(data.organizerId.toString(), 10);
+
+  if (isNaN(latitude) || isNaN(longitude) || isNaN(organizerId)) {
+    throw new BadRequestException(
+      'Latitude, longitude, and organizerId must be valid numbers'
+    );
+  }
+
+  // Création de l'événement
+  const event = await this.prisma.event.create({
+    data: {
+      title: data.title,
+      description: data.description,
+      date: new Date(data.date),
+      location: data.location,
+      latitude,
+      longitude,
+      organizer: { connect: { id: organizerId } },
+    },
+    include: {
+      photos: true, // Inclut les photos dans la réponse
+    },
+  });
+
+  console.log('Event created in database:', event);
+
+  // Ajout des photos à l'événement
+  if (photoUrls.length > 0) {
+    const photosData = photoUrls.map((url) => ({
+      url,
+      eventId: event.id,
+    }));
+
+    console.log('Photos to associate with event:', photosData);
+
+    await this.prisma.photo.createMany({
+      data: photosData,
+    });
+  }
+
+  // Récupère l'événement mis à jour avec ses photos
+  const updatedEvent = await this.prisma.event.findUnique({
+    where: { id: event.id },
+    include: { photos: true }, // Inclut les photos associées
+  });
+
+  return updatedEvent;
+}
 
   async findEventsByDate(date: string) {
     const startDate = new Date(date);
@@ -89,7 +99,7 @@ export class EventsService {
 
   async findAll(userId?: string) {
     const filter = userId ? { organizerId: parseInt(userId) } : {};
-  
+
     return this.prisma.event.findMany({
       where: filter,
       select: {
@@ -134,7 +144,7 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException('Événement non trouvé.');
     }
-  
+
     // Vérifier si l'utilisateur existe
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -142,7 +152,7 @@ export class EventsService {
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé.');
     }
-  
+
     // Vérifier si l'utilisateur est déjà inscrit
     const existingAttendee = await this.prisma.attendee.findFirst({
       where: {
@@ -151,9 +161,11 @@ export class EventsService {
       },
     });
     if (existingAttendee) {
-      throw new BadRequestException('Utilisateur déjà inscrit à cet événement.');
+      throw new BadRequestException(
+        'Utilisateur déjà inscrit à cet événement.'
+      );
     }
-  
+
     // Inscrire l'utilisateur
     await this.prisma.attendee.create({
       data: {
@@ -162,7 +174,7 @@ export class EventsService {
         status: 'confirmed', // Exemple de statut par défaut
       },
     });
-  
+
     // Retourner l'événement avec les participants mis à jour
     return this.findOne(eventId);
   }
@@ -190,7 +202,8 @@ export class EventsService {
             },
           },
         },
-        organizer: { // Ajout des informations de l'organisateur
+        organizer: {
+          // Ajout des informations de l'organisateur
           select: {
             id: true,
             firstName: true,
@@ -283,12 +296,16 @@ export class EventsService {
 
   // SUPPRIME UN ÉVÉNEMENT
   async remove(eventId: number, userId: number) {
+    // Récupère l'événement avec son nom et l'organisateur
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
+      select: { id: true, title: true, organizerId: true }, // Inclut le titre de l'événement
     });
 
-    if (!event) {
-      throw new NotFoundException("L'événement n'existe pas");
+    if (!event || !event.title) {
+      throw new NotFoundException(
+        "L'événement n'existe pas ou son nom est introuvable"
+      );
     }
 
     if (event.organizerId !== userId) {
@@ -321,8 +338,7 @@ export class EventsService {
     });
 
     // Notifie chaque invité et participant que l'événement a été annulé
-    const message = `L'événement (ID : ${eventId}) a été annulé.`;
-    // Correction pour inviter et notifier
+    const message = `L'événement "${event.title}" a été annulé.`; // Utilise le nom de l'événement
     for (const invite of invites) {
       await this.notificationService.createNotification(
         invite.userId, // userId de l'invité
@@ -350,13 +366,13 @@ export class EventsService {
     const attendee = await this.prisma.attendee.findFirst({
       where: { eventId, userId },
     });
-  
+
     if (!attendee) {
       throw new BadRequestException(
         "L'utilisateur n'est pas inscrit à cet événement."
       );
     }
-  
+
     // Supprime l'inscription
     return this.prisma.attendee.delete({
       where: { id: attendee.id },

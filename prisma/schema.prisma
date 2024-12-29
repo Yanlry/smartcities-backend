@@ -56,9 +56,12 @@ model Notification {
   initiatorId  Int?     // Nouvel attribut pour l'initiateur de l'action
   type         String
   relatedId    String
+  eventId      Int?     // Ajout de l'attribut eventId pour relier une notification à un événement
   updatedAt    DateTime @updatedAt
+
   user         User     @relation("UserNotifications", fields: [userId], references: [id])
   initiator    User?    @relation("NotificationInitiator", fields: [initiatorId], references: [id])
+  event        Event?   @relation(fields: [eventId], references: [id]) // Relation avec Event
 }
 
 model UserFollow {
@@ -146,7 +149,6 @@ model Comment {
 
 model Post {
   id        Int       @id @default(autoincrement())
-  title     String
   content   String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -159,22 +161,23 @@ model Post {
 }
 
 model Event {
-  id          Int        @id @default(autoincrement())
-  title       String
-  description String?
-  date        DateTime
-  location    String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  organizerId Int
-  latitude    Float      @default(0.0)
-  longitude   Float      @default(0.0)
-  attendees   Attendee[]
-  organizer   User       @relation("UserEvents", fields: [organizerId], references: [id])
-  invites     Invite[]
-  photos      Photo[]
-  reports     Report[]   @relation("EventReports")
-  votes       Vote[]     @relation("EventVotes")
+  id            Int            @id @default(autoincrement())
+  title         String
+  description   String?
+  date          DateTime
+  location      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  organizerId   Int
+  latitude      Float          @default(0.0)
+  longitude     Float          @default(0.0)
+  attendees     Attendee[]
+  organizer     User           @relation("UserEvents", fields: [organizerId], references: [id])
+  invites       Invite[]
+  photos        Photo[]
+  reports       Report[]       @relation("EventReports")
+  votes         Vote[]         @relation("EventVotes")
+  notifications Notification[] // Relation inverse vers Notification
 }
 
 model Photo {
