@@ -48,37 +48,62 @@ export class PostsService {
     return post;
   }
 
-  // RÉCUPÈRE UNE LISTE DE PUBLICATIONS AVEC LE NOMBRE DE LIKES
-  async listPosts(filters: any) {
-    const posts = await this.prisma.post.findMany({
-      where: filters,
-      include: {
-        likes: true,
-        author: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            useFullName: true,
-            photos: {
-              where: { isProfile: true },
-              select: { url: true },
+// RÉCUPÈRE UNE LISTE DE PUBLICATIONS AVEC LE NOMBRE DE LIKES ET LES COMMENTAIRES
+async listPosts(filters: any) {
+  const posts = await this.prisma.post.findMany({
+    where: filters,
+    include: {
+      likes: true,
+      comments: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              useFullName: true,
+              photos: {
+                where: { isProfile: true },
+                select: { url: true },
+              },
             },
           },
         },
       },
-    });
+      author: {
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          useFullName: true,
+          photos: {
+            where: { isProfile: true },
+            select: { url: true },
+          },
+        },
+      },
+    },
+  });
 
-    return posts.map((post) => ({
-      ...post,
-      likesCount: post.likes.length,
-      authorName: post.author.useFullName
-        ? `${post.author.firstName} ${post.author.lastName}`
-        : post.author.username || 'Utilisateur inconnu',
-      profilePhoto: post.author.photos[0]?.url || null,
-    }));
-  }
+  return posts.map((post) => ({
+    ...post,
+    likesCount: post.likes.length,
+    authorName: post.author.useFullName
+      ? `${post.author.firstName} ${post.author.lastName}`
+      : post.author.username || 'Utilisateur inconnu',
+    profilePhoto: post.author.photos[0]?.url || null,
+    comments: post.comments.map((comment) => ({
+      id: comment.id,
+      text: comment.text,
+      userName: comment.user.useFullName
+        ? `${comment.user.firstName} ${comment.user.lastName}`
+        : comment.user.username || 'Utilisateur inconnu',
+      userProfilePhoto: comment.user.photos[0]?.url || null,
+    })),
+  }));
+}
 
   // RÉCUPÈRE UNE PUBLICATION PAR SON ID AVEC LE NOMBRE DE LIKES
   async getPostById(id: number) {
