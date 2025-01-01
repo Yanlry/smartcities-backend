@@ -97,6 +97,7 @@ async listPosts(filters: any) {
     comments: post.comments.map((comment) => ({
       id: comment.id,
       text: comment.text,
+      userId: comment.user.id, // Ajout explicite du userId
       userName: comment.user.useFullName
         ? `${comment.user.firstName} ${comment.user.lastName}`
         : comment.user.username || 'Utilisateur inconnu',
@@ -198,32 +199,60 @@ async listPosts(filters: any) {
     });
   }
 
-  // AJOUTE UN COMMENTAIRE À UNE PUBLICATION ET MET À JOUR LE TRUSTRATE DE L'UTILISATEUR
   async commentOnPost(commentData: CreateCommentDto) {
     const { postId, userId, text } = commentData;
-
-    // Vérifier que tous les champs sont fournis
+  
     if (!postId || !userId || !text) {
       throw new BadRequestException("Post ID, User ID, and Comment text are required");
     }
-
-    // Créer le commentaire dans la base de données
+  
+    // Log des données reçues
+    console.log("Données reçues dans le backend :", commentData);
+  
     const newComment = await this.prisma.comment.create({
       data: {
-        postId,   // Assurez-vous que 'postId' est bien un nombre
-        userId,   // Assurez-vous que 'userId' est bien un nombre
-        text,     // Le texte du commentaire
+        postId,
+        userId,
+        text,
       },
     });
-
-    // Mettre à jour le trustRate de l'utilisateur après avoir commenté
-    await this.updateUserTrustRate(userId, 0.5); // Exemple d'incrément (ajuster selon la logique de ton application)
-
+  
+    await this.updateUserTrustRate(userId, 0.5);
+  
     return newComment;
   }
 
-  // SUPPRIME UNE PUBLICATION
+  async deleteComment(commentId: number) {
+    try {
+      // Supprimer le commentaire par ID
+      return await this.prisma.comment.delete({
+        where: { id: commentId },
+      });
+    } catch (error) {
+      console.error("Erreur lors de la suppression du commentaire :", error);
+      throw new NotFoundException("Commentaire non trouvé");
+    }
+  }
+  
   async deletePost(id: number) {
-    return this.prisma.post.delete({ where: { id } });
+    try {
+      // Supprime les commentaires associés au post
+      await this.prisma.comment.deleteMany({
+        where: { postId: id },
+      });
+  
+      // Supprime les likes associés au post
+      await this.prisma.like.deleteMany({
+        where: { postId: id },
+      });
+  
+      // Supprime le post
+      return await this.prisma.post.delete({
+        where: { id },
+      });
+    } catch (error) {
+      console.error("Erreur lors de la suppression :", error);
+      throw new Error("Impossible de supprimer la publication.");
+    }
   }
 }

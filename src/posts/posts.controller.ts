@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Delete, Param, Body, Query } from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Param, Body, Query, HttpException, HttpStatus, ParseIntPipe } from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -40,11 +40,26 @@ export class PostsController {
       return this.postsService.toggleLike(postId, userId);
     }
 
-    // SUPPRIME UNE PUBLICATION
     @Delete(':id')
     async deletePost(@Param('id') id: string) {
+      try {
         return this.postsService.deletePost(Number(id));
+      } catch (error) {
+        console.error("Erreur API :", error.message);
+        throw new HttpException("Erreur interne lors de la suppression", HttpStatus.INTERNAL_SERVER_ERROR);
+      }
     }
+
+    // Supprime un commentaire par son ID
+  @Delete('comments/:id')
+  async deleteCommentById(@Param('id', ParseIntPipe) id: number) {
+    try {
+      return this.postsService.deleteComment(id);
+    } catch (error) {
+      console.error("Erreur API :", error.message);
+      throw new HttpException("Erreur lors de la suppression du commentaire", HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 
     // AJOUTE UN COMMENTAIRE ET MET À JOUR LE TRUSTRATE DE L'UTILISATEUR
     @Post('comment')
