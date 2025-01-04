@@ -12,41 +12,67 @@ export class PostsService {
     private notificationService: NotificationService,
   ) { }
 
-  // CRÉER UNE NOUVELLE PUBLICATION
-  async createPost(createPostDto: CreatePostDto) {
-    const post = await this.prisma.post.create({
-      data: {
-        content: createPostDto.content,
-        author: {
-          connect: { id: createPostDto.authorId }, // Utilisez `connect` pour lier l'auteur
-        },
-        latitude: createPostDto.latitude,
-        longitude: createPostDto.longitude,
+// CRÉER UNE NOUVELLE PUBLICATION
+async createPost(createPostDto: CreatePostDto) {
+  // Créer la publication
+  const post = await this.prisma.post.create({
+    data: {
+      content: createPostDto.content,
+      author: {
+        connect: { id: createPostDto.authorId }, // Lier l'auteur à la publication
       },
-    });
-  
-    // Notifier les abonnés de l'auteur de la publication
-    const followers = await this.prisma.user.findMany({
-      where: {
-        following: {
-          some: { id: createPostDto.authorId },
-        },
-      },
-      select: { id: true },
-    });
-  
-    const notificationMessage = `Nouvelle publication de ${createPostDto.authorId}`;
-    for (const follower of followers) {
-      await this.notificationService.createNotification(
-        follower.id,               // ID de l'abonné
-        notificationMessage,       // Message de notification
-        "post",                    // Type de notification
-        post.id                    // ID du post concerné
-      );
-    }
-  
+      latitude: createPostDto.latitude,
+      longitude: createPostDto.longitude,
+    },
+  });
+
+  // Récupérer les informations de l'auteur
+  const author = await this.prisma.user.findUnique({
+    where: { id: createPostDto.authorId },
+    select: {
+      firstName: true,
+      lastName: true,
+      username: true,
+      useFullName: true,
+    },
+  });
+
+  if (!author) {
+    console.error(`Auteur introuvable pour l'ID : ${createPostDto.authorId}`);
     return post;
   }
+
+  // Construire le nom lisible de l'auteur
+  const authorName = author.useFullName
+    ? `${author.firstName} ${author.lastName}`
+    : author.username || 'Un utilisateur';
+
+  // Récupérer les abonnés de l'auteur
+  const followers = await this.prisma.user.findMany({
+    where: {
+      following: {
+        some: { id: createPostDto.authorId },
+      },
+    },
+    select: { id: true },
+  });
+
+  // Créer le message de notification
+  const notificationMessage = `${authorName} a publié un nouveau contenu.`;
+
+  // Envoyer les notifications à tous les abonnés
+  for (const follower of followers) {
+    await this.notificationService.createNotification(
+      follower.id,        // ID de l'abonné
+      notificationMessage, // Message personnalisé
+      "post",             // Type de notification
+      post.id,            // ID du post concerné
+      createPostDto.authorId // InitiatorId (ID de l'auteur de la publication)
+    );
+  }
+
+  return post;
+}
 
 // RÉCUPÈRE UNE LISTE DE PUBLICATIONS AVEC LE NOMBRE DE LIKES ET LES COMMENTAIRES
 async listPosts(filters: any) {
@@ -163,15 +189,36 @@ async listPosts(filters: any) {
         select: { id: true, authorId: true }, // Sélectionne id et authorId
       });
   
-      if (post?.authorId) {
-        const notificationMessage = `Votre publication a été aimée par l'utilisateur ID ${userId}`;
+      // Récupère les informations de l'utilisateur initiateur (celui qui a aimé)
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          firstName: true,
+          lastName: true,
+          username: true,
+          useFullName: true,
+        },
+      });
+  
+      if (post?.authorId && user) {
+        // Construire un nom lisible pour l'utilisateur initiateur
+        const likerName = user.useFullName
+          ? `${user.firstName} ${user.lastName}`
+          : user.username || 'Un utilisateur';
+  
+        // Message de notification personnalisé
+        const notificationMessage = `${likerName} a aimé votre publication.`;
+  
+        // Envoi de la notification
         await this.notificationService.createNotification(
           post.authorId,          // userId (l'auteur du post)
-          notificationMessage,     // message (le message de notification)
-          "post",                  // type (le type de notification, ici "post")
-          post.id                  // relatedId (l'ID du post concerné)
+          notificationMessage,     // message (personnalisé avec le nom du liker)
+          "LIKE",                  // type (le type de notification, ici "LIKE")
+          post.id,                 // relatedId (l'ID du post concerné)
+          userId                   // initiatorId (ID de celui qui a aimé)
         );
       }
+  
       return { message: 'Bravo vous avez liké' };
     }
   }
@@ -209,6 +256,7 @@ async listPosts(filters: any) {
     // Log des données reçues
     console.log("Données reçues dans le backend :", commentData);
   
+    // Créer le commentaire
     const newComment = await this.prisma.comment.create({
       data: {
         postId,
@@ -217,7 +265,54 @@ async listPosts(filters: any) {
       },
     });
   
+    // Incrémenter le trust rate de l'utilisateur qui commente
     await this.updateUserTrustRate(userId, 0.5);
+  
+    // Récupérer l'auteur du post
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { authorId: true },
+    });
+  
+    if (!post) {
+      console.error(`Post introuvable pour l'ID : ${postId}`);
+      return newComment;
+    }
+  
+    // Récupérer les informations de l'utilisateur qui commente
+    const commenter = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        firstName: true,
+        lastName: true,
+        username: true,
+        useFullName: true,
+      },
+    });
+  
+    if (!commenter) {
+      console.error(`Utilisateur introuvable pour l'ID : ${userId}`);
+      return newComment;
+    }
+  
+    // Construire le nom lisible de l'utilisateur qui commente
+    const commenterName = commenter.useFullName
+      ? `${commenter.firstName} ${commenter.lastName}`
+      : commenter.username || "Un utilisateur";
+  
+    // Créer le message de notification
+    const notificationMessage = `${commenterName} a commenté votre publication.`;
+  
+    // Envoyer la notification à l'auteur du post
+    if (post.authorId !== userId) {
+      await this.notificationService.createNotification(
+        post.authorId,          // ID de l'auteur du post
+        notificationMessage,    // Message de notification
+        "comment",              // Type de notification
+        postId,                 // ID du post concerné
+        userId                  // InitiatorId (ID de l'utilisateur qui commente)
+      );
+    }
   
     return newComment;
   }

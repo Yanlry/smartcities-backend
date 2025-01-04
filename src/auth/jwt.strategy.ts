@@ -17,12 +17,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: any) {
     console.log('Payload reçu dans JwtStrategy :', payload);
   
-    if (!payload.userId) {
-      console.error('Erreur : le payload ne contient pas userId');
-      throw new UnauthorizedException();
+    if (!payload || !payload.userId) {
+      console.error('Erreur : le payload est invalide ou ne contient pas userId');
+      throw new UnauthorizedException('JWT invalide');
     }
   
-    return { id: payload.userId, email: payload.email };
+    return { id: payload.userId, email: payload.email }; // Retourne l'utilisateur validé
   }
   
   

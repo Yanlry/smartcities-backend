@@ -294,70 +294,98 @@ async create(data: CreateEventDto, photoUrls: string[]) {
     return { message: "Statut de l'invitation mis à jour avec succès" };
   }
 
-  // SUPPRIME UN ÉVÉNEMENT
   async remove(eventId: number, userId: number) {
-    // Récupère l'événement avec son nom et l'organisateur
+    // Récupère l'événement avec son nom, l'organisateur et ses photos de profil
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, title: true, organizerId: true }, // Inclut le titre de l'événement
+      select: {
+        id: true,
+        title: true,
+        organizerId: true,
+        organizer: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+            useFullName: true,
+            photos: {
+              where: { isProfile: true },
+              select: { url: true },
+            },
+          },
+        },
+      },
     });
-
+  
     if (!event || !event.title) {
       throw new NotFoundException(
         "L'événement n'existe pas ou son nom est introuvable"
       );
     }
-
+  
     if (event.organizerId !== userId) {
       throw new ForbiddenException(
         "Vous n'êtes pas autorisé à supprimer cet événement"
       );
     }
-
+  
     // Récupère les invités et les participants
     const attendees = await this.prisma.attendee.findMany({
       where: { eventId: eventId },
       select: { userId: true },
     });
-
+  
     const invites = await this.prisma.invite.findMany({
       where: { eventId: eventId },
       select: { userId: true },
     });
-
+  
     await this.prisma.attendee.deleteMany({
       where: { eventId: eventId },
     });
-
+  
     await this.prisma.invite.deleteMany({
       where: { eventId: eventId },
     });
-
+  
     const deletedEvent = await this.prisma.event.delete({
       where: { id: eventId },
     });
-
+  
+    // Prépare les informations de l'organisateur
+    const organizerName = event.organizer.useFullName
+      ? `${event.organizer.firstName} ${event.organizer.lastName}`
+      : event.organizer.username || "Un utilisateur";
+  
+    const organizerPhoto =
+      event.organizer.photos?.[0]?.url || "Aucune photo disponible";
+  
     // Notifie chaque invité et participant que l'événement a été annulé
-    const message = `L'événement "${event.title}" a été annulé.`; // Utilise le nom de l'événement
+    const message = `L'événement "${event.title}" organisé par ${organizerName} a été annulé.`;
     for (const invite of invites) {
       await this.notificationService.createNotification(
         invite.userId, // userId de l'invité
         message, // message de notification
-        'event', // type de notification
-        event.id // relatedId (ID de l'événement)
+        "event", // type de notification
+        event.id, // relatedId (ID de l'événement)
+        userId, // initiatorId
+        // Inclure la photo dans les métadonnées
       );
     }
-
+  
     // Correction pour les participants
     for (const attendee of attendees) {
       await this.notificationService.createNotification(
         attendee.userId, // userId du participant
         message, // message de notification
-        'event', // type de notification
-        event.id // relatedId (ID de l'événement)
+        "event", // type de notification
+        event.id, // relatedId (ID de l'événement)
+        userId, // initiatorId
+        // Inclure la photo dans les métadonnées
       );
     }
-
+  
     return deletedEvent;
   }
 

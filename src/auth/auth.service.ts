@@ -11,7 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { hash, compare } from 'bcrypt';
 import * as sgMail from '@sendgrid/mail';
 import { v4 as uuidv4 } from 'uuid'; // UTILISÉ POUR GÉNÉRER DES TOKENS UNIQUES
-
+import { JwtPayload } from 'jsonwebtoken';
 @Injectable()
 export class AuthService {
   constructor(
@@ -132,19 +132,31 @@ export class AuthService {
     };
   }
 
-  async refreshToken(userId: number, refreshToken: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+  async refreshToken(refreshToken: string) {
+    console.log('Tentative de rafraîchissement avec refreshToken :', refreshToken);
   
-    if (!user || !user.refreshToken || !(await compare(refreshToken, user.refreshToken))) {
+    const refreshPayload = this.jwtService.verify<JwtPayload>(refreshToken);
+    console.log('Payload extrait du refresh token :', refreshPayload);
+  
+    const userId = refreshPayload?.userId;
+    if (!userId) {
+      throw new UnauthorizedException('Refresh token invalide (userId manquant)');
+    }
+  
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.refreshToken) {
+      throw new UnauthorizedException('Utilisateur introuvable ou refresh token manquant');
+    }
+  
+    const isRefreshTokenValid = await compare(refreshToken, user.refreshToken);
+    if (!isRefreshTokenValid) {
       throw new UnauthorizedException('Refresh token invalide');
     }
   
+    console.log('Refresh token valide, génération de nouveaux tokens...');
+  
     const payload = { userId: user.id, email: user.email };
-  
-    // Générer un nouveau token d'accès
     const newAccessToken = this.jwtService.sign(payload, { expiresIn: process.env.JWT_ACCESS_EXPIRY || '15m' });
-  
-    // Optionnel : Générer un nouveau refresh token
     const newRefreshToken = this.jwtService.sign(payload, { expiresIn: process.env.JWT_REFRESH_EXPIRY || '30d' });
     const hashedRefreshToken = await hash(newRefreshToken, 10);
   
@@ -153,6 +165,7 @@ export class AuthService {
       data: { refreshToken: hashedRefreshToken },
     });
   
+    console.log('Nouveaux tokens générés et sauvegardés.');
     return { accessToken: newAccessToken, refreshToken: newRefreshToken };
   }
 
