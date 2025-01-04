@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -9,128 +13,163 @@ import { CreateCommentDto } from './dto/create-comment.dto'; // Ajouter le DTO
 export class PostsService {
   constructor(
     private prisma: PrismaService,
-    private notificationService: NotificationService,
-  ) { }
+    private notificationService: NotificationService
+  ) {}
 
-// CRÉER UNE NOUVELLE PUBLICATION
-async createPost(createPostDto: CreatePostDto) {
-  // Créer la publication
-  const post = await this.prisma.post.create({
-    data: {
-      content: createPostDto.content,
-      author: {
-        connect: { id: createPostDto.authorId }, // Lier l'auteur à la publication
+  // CRÉER UNE NOUVELLE PUBLICATION
+  async createPost(createPostDto: CreatePostDto) {
+    // Créer la publication
+    const post = await this.prisma.post.create({
+      data: {
+        content: createPostDto.content,
+        author: {
+          connect: { id: createPostDto.authorId }, // Lier l'auteur à la publication
+        },
+        latitude: createPostDto.latitude,
+        longitude: createPostDto.longitude,
       },
-      latitude: createPostDto.latitude,
-      longitude: createPostDto.longitude,
-    },
-  });
+    });
 
-  // Récupérer les informations de l'auteur
-  const author = await this.prisma.user.findUnique({
-    where: { id: createPostDto.authorId },
-    select: {
-      firstName: true,
-      lastName: true,
-      username: true,
-      useFullName: true,
-    },
-  });
+    // Récupérer les informations de l'auteur
+    const author = await this.prisma.user.findUnique({
+      where: { id: createPostDto.authorId },
+      select: {
+        firstName: true,
+        lastName: true,
+        username: true,
+        useFullName: true,
+      },
+    });
 
-  if (!author) {
-    console.error(`Auteur introuvable pour l'ID : ${createPostDto.authorId}`);
+    if (!author) {
+      console.error(`Auteur introuvable pour l'ID : ${createPostDto.authorId}`);
+      return post;
+    }
+
+    // Construire le nom lisible de l'auteur
+    const authorName = author.useFullName
+      ? `${author.firstName} ${author.lastName}`
+      : author.username || 'Un utilisateur';
+
+    // Récupérer les abonnés de l'auteur
+    const followers = await this.prisma.user.findMany({
+      where: {
+        following: {
+          some: { id: createPostDto.authorId },
+        },
+      },
+      select: { id: true },
+    });
+
+    // Créer le message de notification
+    const notificationMessage = `${authorName} a publié un nouveau contenu.`;
+
+    // Envoyer les notifications à tous les abonnés
+    for (const follower of followers) {
+      await this.notificationService.createNotification(
+        follower.id, // ID de l'abonné
+        notificationMessage, // Message personnalisé
+        'post', // Type de notification
+        post.id, // ID du post concerné
+        createPostDto.authorId // InitiatorId (ID de l'auteur de la publication)
+      );
+    }
+
     return post;
   }
 
-  // Construire le nom lisible de l'auteur
-  const authorName = author.useFullName
-    ? `${author.firstName} ${author.lastName}`
-    : author.username || 'Un utilisateur';
-
-  // Récupérer les abonnés de l'auteur
-  const followers = await this.prisma.user.findMany({
-    where: {
-      following: {
-        some: { id: createPostDto.authorId },
-      },
-    },
-    select: { id: true },
-  });
-
-  // Créer le message de notification
-  const notificationMessage = `${authorName} a publié un nouveau contenu.`;
-
-  // Envoyer les notifications à tous les abonnés
-  for (const follower of followers) {
-    await this.notificationService.createNotification(
-      follower.id,        // ID de l'abonné
-      notificationMessage, // Message personnalisé
-      "post",             // Type de notification
-      post.id,            // ID du post concerné
-      createPostDto.authorId // InitiatorId (ID de l'auteur de la publication)
-    );
-  }
-
-  return post;
-}
-
-// RÉCUPÈRE UNE LISTE DE PUBLICATIONS AVEC LE NOMBRE DE LIKES ET LES COMMENTAIRES
-async listPosts(filters: any) {
-  const posts = await this.prisma.post.findMany({
-    where: filters,
-    include: {
-      likes: true,
-      comments: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              useFullName: true,
-              photos: {
-                where: { isProfile: true },
-                select: { url: true },
+  async listPosts(filters: any) {
+    const posts = await this.prisma.post.findMany({
+      where: filters,
+      include: {
+        likes: true,
+        comments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                useFullName: true,
+                photos: {
+                  where: { isProfile: true },
+                  select: { url: true },
+                },
               },
             },
           },
         },
-      },
-      author: {
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          useFullName: true,
-          photos: {
-            where: { isProfile: true },
-            select: { url: true },
+        author: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            useFullName: true,
+            photos: {
+              where: { isProfile: true },
+              select: { url: true },
+            },
           },
         },
       },
-    },
-  });
-
-  return posts.map((post) => ({
-    ...post,
-    likesCount: post.likes.length,
-    authorName: post.author.useFullName
-      ? `${post.author.firstName} ${post.author.lastName}`
-      : post.author.username || 'Utilisateur inconnu',
-    profilePhoto: post.author.photos[0]?.url || null,
-    comments: post.comments.map((comment) => ({
-      id: comment.id,
-      text: comment.text,
-      userId: comment.user.id, // Ajout explicite du userId
-      userName: comment.user.useFullName
-        ? `${comment.user.firstName} ${comment.user.lastName}`
-        : comment.user.username || 'Utilisateur inconnu',
-      userProfilePhoto: comment.user.photos[0]?.url || null,
-    })),
-  }));
-}
+    });
+  
+    const organizeComments = (comments) => {
+      const commentMap = new Map();
+  
+      // Créer une map pour tous les commentaires
+      comments.forEach((comment) => {
+        commentMap.set(comment.id, { ...comment, replies: [] });
+      });
+  
+      const rootComments = [];
+  
+      comments.forEach((comment) => {
+        if (comment.parentId) {
+          // Si le commentaire a un parentId, ajoutez-le aux replies du parent
+          const parentComment = commentMap.get(comment.parentId);
+          if (parentComment) {
+            parentComment.replies.push(commentMap.get(comment.id));
+          }
+        } else {
+          // Sinon, c'est un commentaire principal
+          rootComments.push(commentMap.get(comment.id));
+        }
+      });
+  
+      return rootComments;
+    };
+  
+    return posts.map((post) => ({
+      id: post.id,
+      content: post.content,
+      createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+      likesCount: post.likes.length,
+      authorId: post.author.id, // Ajout de l'authorId
+      authorName: post.author.useFullName
+        ? `${post.author.firstName} ${post.author.lastName}`
+        : post.author.username || "Utilisateur inconnu",
+      profilePhoto: post.author.photos[0]?.url || null,
+      comments: organizeComments(
+        post.comments.map((comment) => ({
+          id: comment.id,
+          text: comment.text,
+          createdAt: comment.createdAt, // Ajouté pour afficher la date
+          parentId: comment.parentId || null, // Inclure le parentId
+          userId: comment.user?.id || null,
+          userName: comment.user
+            ? comment.user.useFullName
+              ? `${comment.user.firstName} ${comment.user.lastName}`
+              : comment.user.username || "Utilisateur inconnu"
+            : "Utilisateur inconnu",
+          userProfilePhoto: comment.user?.photos[0]?.url || null,
+        }))
+      ),
+    }));
+  }
 
   // RÉCUPÈRE UNE PUBLICATION PAR SON ID AVEC LE NOMBRE DE LIKES
   async getPostById(id: number) {
@@ -164,7 +203,7 @@ async listPosts(filters: any) {
     const existingLike = await this.prisma.like.findFirst({
       where: { postId, userId },
     });
-  
+
     if (existingLike) {
       // Supprime le like existant et décrémente le trustRate de l'utilisateur
       await this.prisma.like.delete({
@@ -180,15 +219,15 @@ async listPosts(filters: any) {
           userId,
         },
       });
-  
+
       await this.updateUserTrustRate(userId, 1); // Incrémenter le trustRate
-  
+
       // Récupère l'auteur de la publication pour lui envoyer une notification
       const post = await this.prisma.post.findUnique({
         where: { id: postId },
         select: { id: true, authorId: true }, // Sélectionne id et authorId
       });
-  
+
       // Récupère les informations de l'utilisateur initiateur (celui qui a aimé)
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -199,30 +238,29 @@ async listPosts(filters: any) {
           useFullName: true,
         },
       });
-  
+
       if (post?.authorId && user) {
         // Construire un nom lisible pour l'utilisateur initiateur
         const likerName = user.useFullName
           ? `${user.firstName} ${user.lastName}`
           : user.username || 'Un utilisateur';
-  
+
         // Message de notification personnalisé
         const notificationMessage = `${likerName} a aimé votre publication.`;
-  
+
         // Envoi de la notification
         await this.notificationService.createNotification(
-          post.authorId,          // userId (l'auteur du post)
-          notificationMessage,     // message (personnalisé avec le nom du liker)
-          "LIKE",                  // type (le type de notification, ici "LIKE")
-          post.id,                 // relatedId (l'ID du post concerné)
-          userId                   // initiatorId (ID de celui qui a aimé)
+          post.authorId, // userId (l'auteur du post)
+          notificationMessage, // message (personnalisé avec le nom du liker)
+          'LIKE', // type (le type de notification, ici "LIKE")
+          post.id, // relatedId (l'ID du post concerné)
+          userId // initiatorId (ID de celui qui a aimé)
         );
       }
-  
+
       return { message: 'Bravo vous avez liké' };
     }
   }
-  
 
   // MET À JOUR LE TRUSTRATE D'UN UTILISATEUR
   async updateUserTrustRate(userId: number, increment: number) {
@@ -247,71 +285,82 @@ async listPosts(filters: any) {
   }
 
   async commentOnPost(commentData: CreateCommentDto) {
-    const { postId, userId, text } = commentData;
+    const { postId, userId, text, parentId } = commentData;
   
+    // Validation des champs obligatoires
     if (!postId || !userId || !text) {
       throw new BadRequestException("Post ID, User ID, and Comment text are required");
+    }
+  
+    // Si parentId est fourni, vérifier que le commentaire parent existe
+    if (parentId) {
+      const parentComment = await this.prisma.comment.findUnique({
+        where: { id: parentId },
+      });
+  
+      if (!parentComment) {
+        throw new BadRequestException("Le commentaire parent n'existe pas.");
+      }
     }
   
     // Log des données reçues
     console.log("Données reçues dans le backend :", commentData);
   
-    // Créer le commentaire
+    // Créer le commentaire ou la réponse
     const newComment = await this.prisma.comment.create({
       data: {
         postId,
         userId,
         text,
+        parentId, // Ajout du parentId pour lier à un commentaire parent
       },
     });
   
     // Incrémenter le trust rate de l'utilisateur qui commente
     await this.updateUserTrustRate(userId, 0.5);
   
-    // Récupérer l'auteur du post
-    const post = await this.prisma.post.findUnique({
-      where: { id: postId },
-      select: { authorId: true },
-    });
+    // Gestion des notifications
+    if (parentId) {
+      // Notification pour une réponse
+      const parentComment = await this.prisma.comment.findUnique({
+        where: { id: parentId },
+        select: { userId: true },
+      });
   
-    if (!post) {
-      console.error(`Post introuvable pour l'ID : ${postId}`);
-      return newComment;
-    }
+      if (parentComment && parentComment.userId !== userId) {
+        const notificationMessage = `Un utilisateur a répondu à votre commentaire.`;
   
-    // Récupérer les informations de l'utilisateur qui commente
-    const commenter = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        firstName: true,
-        lastName: true,
-        username: true,
-        useFullName: true,
-      },
-    });
+        await this.notificationService.createNotification(
+          parentComment.userId, // ID de l'auteur du commentaire parent
+          notificationMessage,  // Message de notification
+          "comment_reply",      // Type de notification
+          postId,               // ID du post concerné
+          userId                // InitiatorId
+        );
+      }
+    } else {
+      // Notification pour un commentaire principal
+      const post = await this.prisma.post.findUnique({
+        where: { id: postId },
+        select: { authorId: true },
+      });
   
-    if (!commenter) {
-      console.error(`Utilisateur introuvable pour l'ID : ${userId}`);
-      return newComment;
-    }
+      if (!post) {
+        console.error(`Post introuvable pour l'ID : ${postId}`);
+        return newComment;
+      }
   
-    // Construire le nom lisible de l'utilisateur qui commente
-    const commenterName = commenter.useFullName
-      ? `${commenter.firstName} ${commenter.lastName}`
-      : commenter.username || "Un utilisateur";
+      if (post.authorId !== userId) {
+        const notificationMessage = `Un utilisateur a commenté votre publication.`;
   
-    // Créer le message de notification
-    const notificationMessage = `${commenterName} a commenté votre publication.`;
-  
-    // Envoyer la notification à l'auteur du post
-    if (post.authorId !== userId) {
-      await this.notificationService.createNotification(
-        post.authorId,          // ID de l'auteur du post
-        notificationMessage,    // Message de notification
-        "comment",              // Type de notification
-        postId,                 // ID du post concerné
-        userId                  // InitiatorId (ID de l'utilisateur qui commente)
-      );
+        await this.notificationService.createNotification(
+          post.authorId,        // ID de l'auteur du post
+          notificationMessage,  // Message de notification
+          "comment",            // Type de notification
+          postId,               // ID du post concerné
+          userId                // InitiatorId
+        );
+      }
     }
   
     return newComment;
@@ -324,30 +373,30 @@ async listPosts(filters: any) {
         where: { id: commentId },
       });
     } catch (error) {
-      console.error("Erreur lors de la suppression du commentaire :", error);
-      throw new NotFoundException("Commentaire non trouvé");
+      console.error('Erreur lors de la suppression du commentaire :', error);
+      throw new NotFoundException('Commentaire non trouvé');
     }
   }
-  
+
   async deletePost(id: number) {
     try {
       // Supprime les commentaires associés au post
       await this.prisma.comment.deleteMany({
         where: { postId: id },
       });
-  
+
       // Supprime les likes associés au post
       await this.prisma.like.deleteMany({
         where: { postId: id },
       });
-  
+
       // Supprime le post
       return await this.prisma.post.delete({
         where: { id },
       });
     } catch (error) {
-      console.error("Erreur lors de la suppression :", error);
-      throw new Error("Impossible de supprimer la publication.");
+      console.error('Erreur lors de la suppression :', error);
+      throw new Error('Impossible de supprimer la publication.');
     }
   }
 }
