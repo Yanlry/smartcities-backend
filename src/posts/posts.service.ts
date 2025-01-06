@@ -176,17 +176,98 @@ export class PostsService {
     const post = await this.prisma.post.findUnique({
       where: { id },
       include: {
+        likes: true,
+        comments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                useFullName: true,
+                photos: {
+                  where: { isProfile: true },
+                  select: { url: true },
+                },
+              },
+            },
+          },
+        },
+        author: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            useFullName: true,
+            photos: {
+              where: { isProfile: true },
+              select: { url: true },
+            },
+          },
+        },
         _count: {
           select: { likes: true }, // Compte le nombre de likes
         },
       },
     });
-
-    if (!post) throw new NotFoundException('Publication non trouvée');
-
+  
+    if (!post) throw new NotFoundException("Publication non trouvée");
+  
+    // Organisez les commentaires comme dans listPosts
+    const organizeComments = (comments) => {
+      const commentMap = new Map();
+  
+      // Créer une map pour tous les commentaires
+      comments.forEach((comment) => {
+        commentMap.set(comment.id, { ...comment, replies: [] });
+      });
+  
+      const rootComments = [];
+  
+      comments.forEach((comment) => {
+        if (comment.parentId) {
+          // Si le commentaire a un parentId, ajoutez-le aux replies du parent
+          const parentComment = commentMap.get(comment.parentId);
+          if (parentComment) {
+            parentComment.replies.push(commentMap.get(comment.id));
+          }
+        } else {
+          // Sinon, c'est un commentaire principal
+          rootComments.push(commentMap.get(comment.id));
+        }
+      });
+  
+      return rootComments;
+    };
+  
     return {
-      ...post,
-      likesCount: post._count.likes, // Ajoute le nombre de likes au résultat
+      id: post.id,
+      content: post.content,
+      createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+      likesCount: post._count.likes,
+      authorId: post.author.id,
+      authorName: post.author.useFullName
+        ? `${post.author.firstName} ${post.author.lastName}`
+        : post.author.username || "Utilisateur inconnu",
+      profilePhoto: post.author.photos[0]?.url || null,
+      comments: organizeComments(
+        post.comments.map((comment) => ({
+          id: comment.id,
+          text: comment.text,
+          createdAt: comment.createdAt, // Ajouté pour afficher la date
+          parentId: comment.parentId || null, // Inclure le parentId
+          userId: comment.user?.id || null,
+          userName: comment.user
+            ? comment.user.useFullName
+              ? `${comment.user.firstName} ${comment.user.lastName}`
+              : comment.user.username || "Utilisateur inconnu"
+            : "Utilisateur inconnu",
+          userProfilePhoto: comment.user?.photos[0]?.url || null,
+        }))
+      ),
     };
   }
 
@@ -319,6 +400,27 @@ export class PostsService {
     // Incrémenter le trust rate de l'utilisateur qui commente
     await this.updateUserTrustRate(userId, 0.5);
   
+    // Récupérer les informations de l'utilisateur qui commente
+    const commenter = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        firstName: true,
+        lastName: true,
+        username: true,
+        useFullName: true,
+      },
+    });
+  
+    if (!commenter) {
+      console.error(`Utilisateur introuvable pour l'ID : ${userId}`);
+      return newComment;
+    }
+  
+    // Construire le nom lisible de l'utilisateur qui commente
+    const commenterName = commenter.useFullName
+      ? `${commenter.firstName} ${commenter.lastName}`
+      : commenter.username || "Un utilisateur";
+  
     // Gestion des notifications
     if (parentId) {
       // Notification pour une réponse
@@ -328,7 +430,7 @@ export class PostsService {
       });
   
       if (parentComment && parentComment.userId !== userId) {
-        const notificationMessage = `Un utilisateur a répondu à votre commentaire.`;
+        const notificationMessage = `${commenterName} a répondu à votre commentaire.`;
   
         await this.notificationService.createNotification(
           parentComment.userId, // ID de l'auteur du commentaire parent
@@ -351,7 +453,7 @@ export class PostsService {
       }
   
       if (post.authorId !== userId) {
-        const notificationMessage = `Un utilisateur a commenté votre publication.`;
+        const notificationMessage = `${commenterName} a commenté votre publication.`;
   
         await this.notificationService.createNotification(
           post.authorId,        // ID de l'auteur du post
