@@ -101,10 +101,20 @@ export class ReportController {
     return this.reportService.getReporById(id, lat, lon);
   }
 
-  // MET À JOUR UN SIGNAL
   @Put(':id')
   async updateReport(@Param('id') id: string, @Body() updateData: any) {
-    return this.reportService.updateReport(Number(id), updateData);
+    console.log("ID reçu dans le contrôleur :", id);
+    console.log("Données reçues dans le contrôleur :", updateData);
+  
+    const numericId = Number(id);
+    if (isNaN(numericId)) {
+      console.error("ID non valide :", id);
+      throw new BadRequestException("L'ID doit être un nombre.");
+    }
+  
+    const result = await this.reportService.updateReport(numericId, updateData);
+    console.log("Résultat de la mise à jour renvoyé par le service :", result);
+    return result;
   }
 
   // SUPPRIME UN SIGNAL

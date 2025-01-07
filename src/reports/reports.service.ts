@@ -138,7 +138,6 @@ export class ReportService {
     return report;
   }
 
-
   async listReports(filters: any) {
     const { latitude, longitude, radiusKm, userId, ...otherFilters } = filters;
   
@@ -658,12 +657,61 @@ export class ReportService {
     };
   }
 
-  // MET À JOUR UN SIGNAL
   async updateReport(id: number, updateData: any) {
-    return this.prisma.report.update({
-      where: { id },
-      data: updateData,
-    });
+    console.log("ID reçu :", id);
+    console.log("Données brutes reçues :", updateData);
+  
+    try {
+      const { userId, createdAt, votes, photos, trustRate, distance, ...filteredData } = updateData;
+      console.log("Données filtrées pour mise à jour :", filteredData);
+  
+      // Mise à jour des champs simples
+      const report = await this.prisma.report.update({
+        where: { id },
+        data: {
+          ...filteredData,
+          user: userId ? { connect: { id: userId } } : undefined,
+        },
+      });
+  
+      console.log("Mise à jour Prisma réussie :", report);
+  
+      // Gestion des photos
+      console.log("Suppression des anciennes photos...");
+      await this.prisma.photo.deleteMany({
+        where: { reportId: id },
+      });
+  
+      if (photos && photos.length > 0) {
+        console.log("Photos reçues pour ajout :", photos);
+  
+        // Filtrage et transformation des photos
+        const validPhotos = photos
+          .filter((photo) => photo.uri || photo.url) // Vérifie qu'une URL est présente
+          .map((photo) => ({
+            url: photo.url || photo.uri, // Priorise `url`, utilise `uri` si `url` est absent
+            reportId: id,
+          }));
+  
+        console.log("Photos valides après transformation :", validPhotos);
+  
+        if (validPhotos.length > 0) {
+          console.log("Ajout des nouvelles photos...");
+          await this.prisma.photo.createMany({
+            data: validPhotos,
+          });
+        } else {
+          console.log("Aucune photo valide à ajouter.");
+        }
+      } else {
+        console.log("Aucune nouvelle photo reçue, seulement suppression.");
+      }
+  
+      return report;
+    } catch (error) {
+      console.error("Erreur dans Prisma :", error);
+      throw new BadRequestException("Impossible de mettre à jour le signalement.");
+    }
   }
 
   // SUPPRIME UN SIGNAL
