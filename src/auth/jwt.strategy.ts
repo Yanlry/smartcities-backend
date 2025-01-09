@@ -10,20 +10,20 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: 'secretKey', // Utilise la même clé que pour la génération des tokens JWT
+      secretOrKey: 'secretKey',
     });
   }
 
   async validate(payload: any) {
     console.log('Payload reçu dans JwtStrategy :', payload);
-  
-    if (!payload || !payload.userId) {
+
+    const userId = payload.userId || payload.sub; // Prise en charge de `sub` comme identifiant
+
+    if (!userId) {
       console.error('Erreur : le payload est invalide ou ne contient pas userId');
       throw new UnauthorizedException('JWT invalide');
     }
-  
-    return { id: payload.userId, email: payload.email }; // Retourne l'utilisateur validé
+
+    return { id: userId, email: payload.email }; // Retourne l'utilisateur validé
   }
-  
-  
 }

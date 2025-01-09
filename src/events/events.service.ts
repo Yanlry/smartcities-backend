@@ -216,12 +216,26 @@ async create(data: CreateEventDto, photoUrls: string[]) {
     });
   }
 
-  // MET À JOUR LES INFORMATIONS D'UN ÉVÉNEMENT
   async update(id: number, data: UpdateEventDto) {
-    return this.prisma.event.update({
+    const { photos, ...filteredData } = data;
+  
+    const updatedEvent = await this.prisma.event.update({
       where: { id },
-      data,
+      data: {
+        ...filteredData,
+        photos: photos
+          ? {
+              deleteMany: {}, // Supprime les anciennes photos
+              create: photos.map((photo) => ({
+                url: photo.url, // Assurez-vous que 'url' est défini
+                // Ajoutez d'autres propriétés nécessaires ici
+              })), // Ajoute les nouvelles photos
+            }
+          : undefined, // Si `photos` n'est pas envoyé, ne modifiez pas les photos
+      },
     });
+  
+    return updatedEvent;
   }
 
   async isRegistered(eventId: number, userId: number) {

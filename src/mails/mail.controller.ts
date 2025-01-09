@@ -1,4 +1,4 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, BadRequestException } from '@nestjs/common';
 import { MailService } from './mail.service';
 
 @Controller('mails')
@@ -6,13 +6,40 @@ export class MailController {
   constructor(private readonly mailService: MailService) {}
 
   /**
-   * API pour envoyer un email.
+   * API pour envoyer un email avec style amélioré.
    * @param body - Corps de la requête contenant les informations de l'email
    */
   @Post('send')
-  async sendEmail(@Body() body: { to: string; subject: string; text: string; html: string }) {
-    const { to, subject, text, html } = body;
-    await this.mailService.sendEmail(to, subject, text, html);
+  async sendEmail(
+    @Body()
+    body: {
+      to: string;
+      subject: string;
+      reporterId: string;
+      reportReason: string;
+      userId?: string; // Optionnel pour les profils
+      conversationId?: string; // Optionnel pour les conversations
+      commentId?: string; // Optionnel pour les commentaires
+    },
+  ) {
+    console.log('Données reçues dans le backend :', body);
+  
+    const { to, subject, reporterId, reportReason, userId, conversationId, commentId } = body;
+  
+    if (!reporterId || !reportReason || (!userId && !conversationId && !commentId)) {
+      throw new BadRequestException(
+        "Les données de signalement sont incomplètes. Un 'userId', 'conversationId', ou 'commentId' est requis.",
+      );
+    }
+  
+    await this.mailService.sendEmail(to, subject, {
+      reporterId,
+      reportReason,
+      userId,
+      conversationId,
+      commentId, // Inclure commentId
+    });
+  
     return { message: 'Email envoyé avec succès' };
   }
 }

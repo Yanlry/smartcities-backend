@@ -129,9 +129,9 @@ export class EventsController {
     return this.eventsService.findOne(+id);
   }
 
-  // MET À JOUR LES INFORMATIONS D'UN ÉVÉNEMENT
   @Put(':id')
   update(@Param('id') id: string, @Body() updateEventDto: UpdateEventDto) {
+    console.log('Données reçues pour mise à jour :', updateEventDto);
     return this.eventsService.update(+id, updateEventDto);
   }
 
