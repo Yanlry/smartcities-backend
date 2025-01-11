@@ -82,7 +82,7 @@ export class MailService {
               .details {
                 margin: 20px 0;
                 padding: 15px;
-                background: #f9f9f9;
+                background: #F2F4F7;
                 border: 1px solid #ddd;
                 border-radius: 8px;
               }

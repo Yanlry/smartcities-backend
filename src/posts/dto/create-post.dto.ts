@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsArray } from 'class-validator';
 
 export class CreatePostDto {
   @IsString()
@@ -16,4 +16,9 @@ export class CreatePostDto {
   @IsNumber()
   @IsOptional()
   longitude?: number; // Longitude (facultatif)
+
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true }) // Chaque élément du tableau doit être une chaîne
+  photoUrls?: string[]; // URLs des photos associées (facultatif)
 }

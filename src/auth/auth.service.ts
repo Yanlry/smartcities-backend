@@ -251,7 +251,7 @@ const refreshToken = this.jwtService.sign(payload, {
 
     // Contenu HTML stylisé avec un token clairement visible
     const htmlContent = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; padding: 20px; background-color: #f9f9f9;">
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; padding: 20px; background-color: #F2F4F7;">
         <h2 style="color: #4CAF50;">Réinitialisation de mot de passe</h2>
         <p>Bonjour,</p>
         <p>Vous avez demandé à réinitialiser votre mot de passe. Voici votre token de réinitialisation :</p>

@@ -158,6 +158,7 @@ model Post {
   comments  Comment[]
   likes     Like[]
   author    User      @relation(fields: [authorId], references: [id])
+  photos    Photo[]   // Relation avec les photos
 }
 
 model Event {
@@ -187,10 +188,12 @@ model Photo {
   createdAt DateTime @default(now())
   reportId  Int?
   userId    Int?
+  postId    Int?     // Nouvelle relation avec Post
   isProfile Boolean  @default(false)
   event     Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   report    Report?  @relation(fields: [reportId], references: [id], onDelete: Cascade)
   user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 model Attendee {

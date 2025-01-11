@@ -17,65 +17,51 @@ export class PostsService {
   ) {}
 
   // CRÉER UNE NOUVELLE PUBLICATION
-  async createPost(createPostDto: CreatePostDto) {
-    // Créer la publication
+  async createPost(createPostDto: CreatePostDto, photoUrls: string[]) {
+    console.log('Photo URLs received in createPost service:', photoUrls);
+  
+    // Création de la publication
     const post = await this.prisma.post.create({
       data: {
         content: createPostDto.content,
+        latitude: createPostDto.latitude,
+        longitude: createPostDto.longitude,
         author: {
           connect: { id: createPostDto.authorId }, // Lier l'auteur à la publication
         },
-        latitude: createPostDto.latitude,
-        longitude: createPostDto.longitude,
       },
     });
-
-    // Récupérer les informations de l'auteur
-    const author = await this.prisma.user.findUnique({
-      where: { id: createPostDto.authorId },
-      select: {
-        firstName: true,
-        lastName: true,
-        username: true,
-        useFullName: true,
-      },
-    });
-
-    if (!author) {
-      console.error(`Auteur introuvable pour l'ID : ${createPostDto.authorId}`);
-      return post;
+  
+    console.log('Post created in database:', post);
+  
+    // Associer les photos au post
+    if (photoUrls && photoUrls.length > 0) {
+      const photosData = photoUrls.map((url) => ({
+        url,
+        postId: post.id,
+      }));
+  
+      console.log('Associating photos with post:', photosData);
+  
+      try {
+        await this.prisma.photo.createMany({
+          data: photosData,
+        });
+      } catch (error) {
+        console.error('Erreur lors de l’association des photos au post:', error);
+        throw new BadRequestException('Erreur lors de l’association des photos.');
+      }
     }
-
-    // Construire le nom lisible de l'auteur
-    const authorName = author.useFullName
-      ? `${author.firstName} ${author.lastName}`
-      : author.username || 'Un utilisateur';
-
-    // Récupérer les abonnés de l'auteur
-    const followers = await this.prisma.user.findMany({
-      where: {
-        following: {
-          some: { id: createPostDto.authorId },
-        },
-      },
-      select: { id: true },
+  
+    // Récupérer la publication mise à jour avec les photos associées
+    const updatedPost = await this.prisma.post.findUnique({
+      where: { id: post.id },
+      include: { photos: true }, // Inclure les photos associées
     });
-
-    // Créer le message de notification
-    const notificationMessage = `${authorName} a publié un nouveau contenu.`;
-
-    // Envoyer les notifications à tous les abonnés
-    for (const follower of followers) {
-      await this.notificationService.createNotification(
-        follower.id, // ID de l'abonné
-        notificationMessage, // Message personnalisé
-        'post', // Type de notification
-        post.id, // ID du post concerné
-        createPostDto.authorId // InitiatorId (ID de l'auteur de la publication)
-      );
-    }
-
-    return post;
+  
+    console.log('Post with associated photos:', updatedPost);
+  
+    return updatedPost; // Retourne le post avec les photos associées
   }
 
   async listPosts(filters: any) {
@@ -83,6 +69,9 @@ export class PostsService {
       where: filters,
       include: {
         likes: true,
+        photos: { // Inclure les photos associées
+          select: { url: true }, // Sélectionner uniquement l'URL des photos
+        },
         comments: {
           include: {
             user: {
@@ -153,6 +142,7 @@ export class PostsService {
         ? `${post.author.firstName} ${post.author.lastName}`
         : post.author.username || "Utilisateur inconnu",
       profilePhoto: post.author.photos[0]?.url || null,
+      photos: post.photos.map((photo) => photo.url), // Ajouter les URLs des photos
       comments: organizeComments(
         post.comments.map((comment) => ({
           id: comment.id,
@@ -172,104 +162,109 @@ export class PostsService {
   }
 
   // RÉCUPÈRE UNE PUBLICATION PAR SON ID AVEC LE NOMBRE DE LIKES
-  async getPostById(id: number) {
-    const post = await this.prisma.post.findUnique({
-      where: { id },
-      include: {
-        likes: true,
-        comments: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                useFullName: true,
-                photos: {
-                  where: { isProfile: true },
-                  select: { url: true },
-                },
+// RÉCUPÈRE UNE PUBLICATION PAR SON ID AVEC LE NOMBRE DE LIKES ET LES PHOTOS ASSOCIÉES
+async getPostById(id: number) {
+  const post = await this.prisma.post.findUnique({
+    where: { id },
+    include: {
+      likes: true,
+      photos: { // Inclure les photos associées au post
+        select: { url: true }, // Sélectionner uniquement l'URL des photos
+      },
+      comments: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              useFullName: true,
+              photos: {
+                where: { isProfile: true },
+                select: { url: true },
               },
             },
           },
         },
-        author: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            useFullName: true,
-            photos: {
-              where: { isProfile: true },
-              select: { url: true },
-            },
+      },
+      author: {
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          useFullName: true,
+          photos: {
+            where: { isProfile: true },
+            select: { url: true },
           },
         },
-        _count: {
-          select: { likes: true }, // Compte le nombre de likes
-        },
       },
+      _count: {
+        select: { likes: true }, // Compte le nombre de likes
+      },
+    },
+  });
+
+  if (!post) throw new NotFoundException("Publication non trouvée");
+
+  // Organisez les commentaires comme dans listPosts
+  const organizeComments = (comments) => {
+    const commentMap = new Map();
+
+    // Créer une map pour tous les commentaires
+    comments.forEach((comment) => {
+      commentMap.set(comment.id, { ...comment, replies: [] });
     });
-  
-    if (!post) throw new NotFoundException("Publication non trouvée");
-  
-    // Organisez les commentaires comme dans listPosts
-    const organizeComments = (comments) => {
-      const commentMap = new Map();
-  
-      // Créer une map pour tous les commentaires
-      comments.forEach((comment) => {
-        commentMap.set(comment.id, { ...comment, replies: [] });
-      });
-  
-      const rootComments = [];
-  
-      comments.forEach((comment) => {
-        if (comment.parentId) {
-          // Si le commentaire a un parentId, ajoutez-le aux replies du parent
-          const parentComment = commentMap.get(comment.parentId);
-          if (parentComment) {
-            parentComment.replies.push(commentMap.get(comment.id));
-          }
-        } else {
-          // Sinon, c'est un commentaire principal
-          rootComments.push(commentMap.get(comment.id));
+
+    const rootComments = [];
+
+    comments.forEach((comment) => {
+      if (comment.parentId) {
+        // Si le commentaire a un parentId, ajoutez-le aux replies du parent
+        const parentComment = commentMap.get(comment.parentId);
+        if (parentComment) {
+          parentComment.replies.push(commentMap.get(comment.id));
         }
-      });
-  
-      return rootComments;
-    };
-  
-    return {
-      id: post.id,
-      content: post.content,
-      createdAt: post.createdAt,
-      updatedAt: post.updatedAt,
-      likesCount: post._count.likes,
-      authorId: post.author.id,
-      authorName: post.author.useFullName
-        ? `${post.author.firstName} ${post.author.lastName}`
-        : post.author.username || "Utilisateur inconnu",
-      profilePhoto: post.author.photos[0]?.url || null,
-      comments: organizeComments(
-        post.comments.map((comment) => ({
-          id: comment.id,
-          text: comment.text,
-          createdAt: comment.createdAt, // Ajouté pour afficher la date
-          parentId: comment.parentId || null, // Inclure le parentId
-          userId: comment.user?.id || null,
-          userName: comment.user
-            ? comment.user.useFullName
-              ? `${comment.user.firstName} ${comment.user.lastName}`
-              : comment.user.username || "Utilisateur inconnu"
-            : "Utilisateur inconnu",
-          userProfilePhoto: comment.user?.photos[0]?.url || null,
-        }))
-      ),
-    };
-  }
+      } else {
+        // Sinon, c'est un commentaire principal
+        rootComments.push(commentMap.get(comment.id));
+      }
+    });
+
+    return rootComments;
+  };
+
+  return {
+    id: post.id,
+    content: post.content,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+    likesCount: post._count.likes,
+    authorId: post.author.id,
+    authorName: post.author.useFullName
+      ? `${post.author.firstName} ${post.author.lastName}`
+      : post.author.username || "Utilisateur inconnu",
+    profilePhoto: post.author.photos[0]?.url || null,
+    photos: post.photos.map((photo) => photo.url), // Ajoutez les URLs des photos ici
+    comments: organizeComments(
+      post.comments.map((comment) => ({
+        id: comment.id,
+        text: comment.text,
+        createdAt: comment.createdAt, // Ajouté pour afficher la date
+        parentId: comment.parentId || null, // Inclure le parentId
+        userId: comment.user?.id || null,
+        userName: comment.user
+          ? comment.user.useFullName
+            ? `${comment.user.firstName} ${comment.user.lastName}`
+            : comment.user.username || "Utilisateur inconnu"
+          : "Utilisateur inconnu",
+        userProfilePhoto: comment.user?.photos[0]?.url || null,
+      }))
+    ),
+  };
+}
 
   // MODIFIER UNE PUBLICATION
   async updatePost(id: number, updatePostDto: UpdatePostDto) {
