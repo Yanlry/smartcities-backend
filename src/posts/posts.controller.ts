@@ -15,69 +15,64 @@ export class PostsController {
   private readonly logger = new Logger(PostsController.name);
 
   @Post()
-@UseInterceptors(
-  FilesInterceptor('photos', 5, {
-    limits: { fileSize: 10 * 1024 * 1024 }, // Limite à 10 Mo par fichier
-  })
-)
-async createPost(
-  @Body() createPostDto: CreatePostDto,
-  @UploadedFiles() photos: Express.Multer.File[]
-) {
-  this.logger.log('Creating post...');
-  this.logger.debug('Received Body:', createPostDto);
-  this.logger.debug('Received Files:', photos);
-
-  // Vérification des fichiers
-  if (!photos || photos.length === 0) {
-    throw new BadRequestException('Aucune photo reçue.');
-  }
-
-  const validPhotos = photos.filter(
-    (file) => file.buffer && file.originalname && file.mimetype
-  );
-
-  if (validPhotos.length === 0) {
-    throw new BadRequestException('Aucune photo valide trouvée.');
-  }
-  this.logger.debug('Valid Files:', validPhotos);
-
-  // Upload des photos sur AWS S3
-  const photoUrls = [];
-  for (const photo of validPhotos) {
-    try {
-      this.logger.debug('Uploading valid file:', {
-        name: photo.originalname,
-        mimetype: photo.mimetype,
-        size: photo.size,
-      });
-      const url = await this.s3Service.uploadFile(photo);
-      photoUrls.push(url);
-    } catch (error) {
-      this.logger.error(
-        `Erreur lors de l'upload du fichier ${photo.originalname}:`,
-        error.message
+  @UseInterceptors(
+    FilesInterceptor('photos', 5, {
+      limits: { fileSize: 10 * 1024 * 1024 }, // Limite à 10 Mo par fichier
+    })
+  )
+  async createPost(
+    @Body() createPostDto: CreatePostDto,
+    @UploadedFiles() photos: Express.Multer.File[]
+  ) {
+    this.logger.log('Creating post...');
+    this.logger.debug('Received Body:', createPostDto);
+    this.logger.debug('Received Files:', photos);
+  
+    // Si des fichiers sont envoyés, filtre uniquement les fichiers valides
+    let photoUrls = [];
+    if (photos && photos.length > 0) {
+      const validPhotos = photos.filter(
+        (file) => file.buffer && file.originalname && file.mimetype
       );
+  
+      this.logger.debug('Valid Files:', validPhotos);
+  
+      // Upload des photos sur AWS S3
+      for (const photo of validPhotos) {
+        try {
+          this.logger.debug('Uploading valid file:', {
+            name: photo.originalname,
+            mimetype: photo.mimetype,
+            size: photo.size,
+          });
+          const url = await this.s3Service.uploadFile(photo);
+          photoUrls.push(url);
+        } catch (error) {
+          this.logger.error(
+            `Erreur lors de l'upload du fichier ${photo.originalname}:`,
+            error.message
+          );
+          throw new BadRequestException(
+            `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`
+          );
+        }
+      }
+    }
+  
+    this.logger.debug('All uploaded photo URLs:', photoUrls);
+  
+    // Appel au service pour créer le post
+    try {
+      const post = await this.postsService.createPost(createPostDto, photoUrls);
+      this.logger.log('Post created successfully:', post);
+      return post;
+    } catch (error) {
+      this.logger.error('Error creating post:', error.message);
       throw new BadRequestException(
-        `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`
+        `Erreur lors de la création du post : ${error.message}`
       );
     }
   }
-
-  this.logger.debug('All uploaded photo URLs:', photoUrls);
-
-  // Appel au service pour créer le post
-  try {
-    const post = await this.postsService.createPost(createPostDto, photoUrls);
-    this.logger.log('Post created successfully:', post);
-    return post;
-  } catch (error) {
-    this.logger.error('Error creating post:', error.message);
-    throw new BadRequestException(
-      `Erreur lors de la création du post : ${error.message}`
-    );
-  }
-}
 
     // LISTE LES PUBLICATIONS
     @Get()
