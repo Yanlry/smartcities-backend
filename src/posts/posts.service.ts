@@ -64,13 +64,13 @@ export class PostsService {
     return updatedPost; // Retourne le post avec les photos associées
   }
 
-  async listPosts(filters: any) {
+  async listPosts(filters: any, userId: number) {
     const posts = await this.prisma.post.findMany({
       where: filters,
       include: {
-        likes: true,
-        photos: { // Inclure les photos associées
-          select: { url: true }, // Sélectionner uniquement l'URL des photos
+        likes: true, // Inclure les likes pour calculer `likedByUser`
+        photos: {
+          select: { url: true }, // Sélectionner uniquement les URLs des photos
         },
         comments: {
           include: {
@@ -136,8 +136,9 @@ export class PostsService {
       content: post.content,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
-      likesCount: post.likes.length,
-      authorId: post.author.id, // Ajout de l'authorId
+      likesCount: post.likes.length, // Compte le nombre de likes
+      likedByUser: post.likes.some((like) => like.userId === userId), // Vérifie si l'utilisateur a liké
+      authorId: post.author.id,
       authorName: post.author.useFullName
         ? `${post.author.firstName} ${post.author.lastName}`
         : post.author.username || "Utilisateur inconnu",
@@ -163,13 +164,13 @@ export class PostsService {
 
   // RÉCUPÈRE UNE PUBLICATION PAR SON ID AVEC LE NOMBRE DE LIKES
 // RÉCUPÈRE UNE PUBLICATION PAR SON ID AVEC LE NOMBRE DE LIKES ET LES PHOTOS ASSOCIÉES
-async getPostById(id: number) {
+async getPostById(id: number, userId: number) {
   const post = await this.prisma.post.findUnique({
     where: { id },
     include: {
       likes: true,
-      photos: { // Inclure les photos associées au post
-        select: { url: true }, // Sélectionner uniquement l'URL des photos
+      photos: {
+        select: { url: true },
       },
       comments: {
         include: {
@@ -202,18 +203,17 @@ async getPostById(id: number) {
         },
       },
       _count: {
-        select: { likes: true }, // Compte le nombre de likes
+        select: { likes: true },
       },
     },
   });
 
-  if (!post) throw new NotFoundException("Publication non trouvée");
+  if (!post) throw new NotFoundException('Publication non trouvée');
 
-  // Organisez les commentaires comme dans listPosts
+  // Organiser les commentaires comme dans listPosts
   const organizeComments = (comments) => {
     const commentMap = new Map();
 
-    // Créer une map pour tous les commentaires
     comments.forEach((comment) => {
       commentMap.set(comment.id, { ...comment, replies: [] });
     });
@@ -222,13 +222,11 @@ async getPostById(id: number) {
 
     comments.forEach((comment) => {
       if (comment.parentId) {
-        // Si le commentaire a un parentId, ajoutez-le aux replies du parent
         const parentComment = commentMap.get(comment.parentId);
         if (parentComment) {
           parentComment.replies.push(commentMap.get(comment.id));
         }
       } else {
-        // Sinon, c'est un commentaire principal
         rootComments.push(commentMap.get(comment.id));
       }
     });
@@ -236,30 +234,34 @@ async getPostById(id: number) {
     return rootComments;
   };
 
+  // Vérifier si l'utilisateur connecté a liké ce post
+  const likedByUser = post.likes.some((like) => like.userId === userId);
+
   return {
     id: post.id,
     content: post.content,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
     likesCount: post._count.likes,
+    likedByUser, // Ajouter cette propriété
     authorId: post.author.id,
     authorName: post.author.useFullName
       ? `${post.author.firstName} ${post.author.lastName}`
-      : post.author.username || "Utilisateur inconnu",
+      : post.author.username || 'Utilisateur inconnu',
     profilePhoto: post.author.photos[0]?.url || null,
-    photos: post.photos.map((photo) => photo.url), // Ajoutez les URLs des photos ici
+    photos: post.photos.map((photo) => photo.url),
     comments: organizeComments(
       post.comments.map((comment) => ({
         id: comment.id,
         text: comment.text,
-        createdAt: comment.createdAt, // Ajouté pour afficher la date
-        parentId: comment.parentId || null, // Inclure le parentId
+        createdAt: comment.createdAt,
+        parentId: comment.parentId || null,
         userId: comment.user?.id || null,
         userName: comment.user
           ? comment.user.useFullName
             ? `${comment.user.firstName} ${comment.user.lastName}`
-            : comment.user.username || "Utilisateur inconnu"
-          : "Utilisateur inconnu",
+            : comment.user.username || 'Utilisateur inconnu'
+          : 'Utilisateur inconnu',
         userProfilePhoto: comment.user?.photos[0]?.url || null,
       }))
     ),

@@ -1,9 +1,30 @@
-import { Controller, Post, Get, Put, Delete, Param, Body, Query, HttpException, HttpStatus, ParseIntPipe, Logger, UseInterceptors, UploadedFiles, BadRequestException,  } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Delete,
+  Param,
+  Body,
+  Query,
+  HttpException,
+  HttpStatus,
+  ParseIntPipe,
+  Logger,
+  UseInterceptors,
+  UploadedFiles,
+  BadRequestException,
+  UnauthorizedException,
+  UseGuards,
+  Req
+
+} from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { S3Service } from '../services/s3/s3.service';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('posts')
 export class PostsController {
@@ -27,40 +48,37 @@ export class PostsController {
     this.logger.log('Creating post...');
     this.logger.debug('Received Body:', createPostDto);
     this.logger.debug('Received Files:', photos);
-  
-    // Si des fichiers sont envoyés, filtre uniquement les fichiers valides
-    let photoUrls = [];
-    if (photos && photos.length > 0) {
-      const validPhotos = photos.filter(
-        (file) => file.buffer && file.originalname && file.mimetype
-      );
-  
-      this.logger.debug('Valid Files:', validPhotos);
-  
-      // Upload des photos sur AWS S3
-      for (const photo of validPhotos) {
-        try {
-          this.logger.debug('Uploading valid file:', {
-            name: photo.originalname,
-            mimetype: photo.mimetype,
-            size: photo.size,
-          });
-          const url = await this.s3Service.uploadFile(photo);
-          photoUrls.push(url);
-        } catch (error) {
-          this.logger.error(
-            `Erreur lors de l'upload du fichier ${photo.originalname}:`,
-            error.message
-          );
-          throw new BadRequestException(
-            `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`
-          );
-        }
+
+    const validPhotos = photos.filter(
+      (file) => file.buffer && file.originalname && file.mimetype
+    );
+
+    this.logger.debug('Valid Files:', validPhotos);
+
+    // Upload des photos sur AWS S3
+    const photoUrls = [];
+    for (const photo of validPhotos) {
+      try {
+        this.logger.debug('Uploading valid file:', {
+          name: photo.originalname,
+          mimetype: photo.mimetype,
+          size: photo.size,
+        });
+        const url = await this.s3Service.uploadFile(photo);
+        photoUrls.push(url);
+      } catch (error) {
+        this.logger.error(
+          `Erreur lors de l'upload du fichier ${photo.originalname}:`,
+          error.message
+        );
+        throw new BadRequestException(
+          `Erreur lors de l'upload de la photo ${photo.originalname}: ${error.message}`
+        );
       }
     }
-  
+
     this.logger.debug('All uploaded photo URLs:', photoUrls);
-  
+
     // Appel au service pour créer le post
     try {
       const post = await this.postsService.createPost(createPostDto, photoUrls);
@@ -74,57 +92,84 @@ export class PostsController {
     }
   }
 
-    // LISTE LES PUBLICATIONS
-    @Get()
-    async listPosts(@Query() filters: any) {
-        return this.postsService.listPosts(filters);
-    }
+  // LISTE LES PUBLICATIONS
+  @Get()
+@UseGuards(JwtAuthGuard) // Protéger la route avec le guard JWT
+async listPosts(@Query() filters: any, @Req() req: any) {
+  const user = req.user; // Récupère l'utilisateur validé par JwtStrategy
 
-    // RÉCUPÈRE LES DÉTAILS D'UNE PUBLICATION SPÉCIFIQUE
-    @Get(':id')
-    async getPostById(@Param('id') id: string) {
-        return this.postsService.getPostById(Number(id));
-    }
+  if (!user || !user.id) {
+    throw new UnauthorizedException('Utilisateur non authentifié');
+  }
 
-    // MODIFIER UNE PUBLICATION
-    @Put(':id')
-    async updatePost(@Param('id') id: string, @Body() updatePostDto: UpdatePostDto) {
-        return this.postsService.updatePost(Number(id), updatePostDto);
-    }
+  // Passer les `filters` et l'ID utilisateur au service
+  return this.postsService.listPosts(filters, user.id);
+}
 
-    // AJOUTE OU SUPPRIME UN LIKE À UNE PUBLICATION ET MET À JOUR LE TRUSTRATE
-    @Post(':postId/like')
-    async toggleLike(
-      @Param('postId') postId: number,
-      @Body('userId') userId: number
-    ) {
-      return this.postsService.toggleLike(postId, userId);
-    }
+  // RÉCUPÈRE LES DÉTAILS D'UNE PUBLICATION SPÉCIFIQUE
+// RÉCUPÈRE LES DÉTAILS D'UNE PUBLICATION SPÉCIFIQUE
+@Get(':id')
+@UseGuards(JwtAuthGuard) // Protéger la route avec le guard JWT
+async getPostById(@Param('id') id: string, @Req() req: any) {
+  const user = req.user; // Récupère l'utilisateur connecté
+  if (!user || !user.id) {
+    throw new UnauthorizedException('Utilisateur non authentifié');
+  }
 
-    @Delete(':id')
-    async deletePost(@Param('id') id: string) {
-      try {
-        return this.postsService.deletePost(Number(id));
-      } catch (error) {
-        console.error("Erreur API :", error.message);
-        throw new HttpException("Erreur interne lors de la suppression", HttpStatus.INTERNAL_SERVER_ERROR);
-      }
-    }
+  // Passer l'ID de l'utilisateur au service
+  return this.postsService.getPostById(Number(id), user.id);
+}
 
-    // Supprime un commentaire par son ID
+  // MODIFIER UNE PUBLICATION
+  @Put(':id')
+  async updatePost(
+    @Param('id') id: string,
+    @Body() updatePostDto: UpdatePostDto
+  ) {
+    return this.postsService.updatePost(Number(id), updatePostDto);
+  }
+
+  // AJOUTE OU SUPPRIME UN LIKE À UNE PUBLICATION ET MET À JOUR LE TRUSTRATE
+  @Post(':postId/like')
+  async toggleLike(
+    @Param('postId') postId: number,
+    @Body('userId') userId: number
+  ) {
+    return this.postsService.toggleLike(postId, userId);
+  }
+
+  @Delete(':id')
+  async deletePost(@Param('id') id: string) {
+    try {
+      return this.postsService.deletePost(Number(id));
+    } catch (error) {
+      console.error('Erreur API :', error.message);
+      throw new HttpException(
+        'Erreur interne lors de la suppression',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  // Supprime un commentaire par son ID
   @Delete('comments/:id')
   async deleteCommentById(@Param('id', ParseIntPipe) id: number) {
     try {
       return this.postsService.deleteComment(id);
     } catch (error) {
-      console.error("Erreur API :", error.message);
-      throw new HttpException("Erreur lors de la suppression du commentaire", HttpStatus.INTERNAL_SERVER_ERROR);
+      console.error('Erreur API :', error.message);
+      throw new HttpException(
+        'Erreur lors de la suppression du commentaire',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 
-    // AJOUTE UN COMMENTAIRE ET MET À JOUR LE TRUSTRATE DE L'UTILISATEUR
-    @Post('comment')
-    async commentOnPost(@Body() commentData: { postId: number; userId: number; text: string }) {
-      return this.postsService.commentOnPost(commentData);
-    }
+  // AJOUTE UN COMMENTAIRE ET MET À JOUR LE TRUSTRATE DE L'UTILISATEUR
+  @Post('comment')
+  async commentOnPost(
+    @Body() commentData: { postId: number; userId: number; text: string }
+  ) {
+    return this.postsService.commentOnPost(commentData);
+  }
 }
