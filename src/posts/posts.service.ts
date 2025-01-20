@@ -27,7 +27,7 @@ export class PostsService {
         latitude: createPostDto.latitude,
         longitude: createPostDto.longitude,
         author: {
-          connect: { id: createPostDto.authorId }, // Lier l'auteur à la publication
+          connect: { id: createPostDto.authorId },
         },
       },
     });
@@ -56,14 +56,63 @@ export class PostsService {
     // Récupérer la publication mise à jour avec les photos associées
     const updatedPost = await this.prisma.post.findUnique({
       where: { id: post.id },
-      include: { photos: true }, // Inclure les photos associées
+      include: { photos: true },
     });
   
     console.log('Post with associated photos:', updatedPost);
   
+    // **Notifier les followers de l'auteur**
+    try {
+      // Récupérer les followers de l'auteur via UserFollow
+      const followers = await this.prisma.userFollow.findMany({
+        where: { followingId: createPostDto.authorId },
+        include: {
+          follower: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              useFullName: true,
+            },
+          },
+        },
+      });
+  
+      console.log(`Found ${followers.length} followers to notify.`);
+  
+      // Récupérer les informations de l'auteur
+      const author = await this.prisma.user.findUnique({
+        where: { id: createPostDto.authorId },
+        select: {
+          username: true,
+          firstName: true,
+          lastName: true,
+          useFullName: true,
+        },
+      });
+  
+      const authorName = author.useFullName
+        ? `${author.firstName} ${author.lastName}`
+        : author.username || 'Un utilisateur';
+  
+      // Créer une notification pour chaque follower
+      for (const { follower } of followers) {
+        await this.notificationService.createNotification(
+          follower.id, // L'ID du follower
+          `${authorName} a publié un nouveau post : "${createPostDto.content.substring(0, 50)}..."`,
+          'NEW_POST',
+          post.id, // relatedId : ID du post
+          createPostDto.authorId // initiatorId : l'auteur du post
+        );
+      }
+    } catch (error) {
+      console.error('Erreur lors de la création des notifications pour les followers :', error.message);
+    }
+  
     return updatedPost; // Retourne le post avec les photos associées
   }
-
+  
   async listPosts(filters: any, userId: number) {
     const posts = await this.prisma.post.findMany({
       where: filters,

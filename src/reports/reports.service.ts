@@ -632,7 +632,7 @@ export class ReportService {
       if (report.userId !== userId) {
         await this.notificationService.createNotification(
           report.userId,
-          `${commenterName} a commenté votre signalement : "${text}"`,
+          `${commenterName} a commenté votre signalement.`,
           'COMMENT',
           reportId, // `relatedId`
           userId // `initiatorId` (celui qui commente)
@@ -729,100 +729,113 @@ export class ReportService {
     longitude: number;
   }) {
     const { reportId, userId, type } = voteData;
-
-    try {
-      if (!type || !['up', 'down'].includes(type)) {
-        throw new BadRequestException('Type de vote invalide.');
+  
+    if (!type || !['up', 'down'].includes(type)) {
+      throw new BadRequestException('Type de vote invalide.');
+    }
+  
+    const report = await this.prisma.report.findUnique({
+      where: { id: reportId },
+    });
+  
+    if (!report) {
+      throw new NotFoundException(`Signalement introuvable pour l'ID : ${reportId}`);
+    }
+  
+    const voter = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        username: true,
+        firstName: true,
+        lastName: true,
+        useFullName: true,
+      },
+    });
+  
+    if (!voter) {
+      throw new NotFoundException('Utilisateur introuvable.');
+    }
+  
+    const voterName = voter.useFullName
+      ? `${voter.firstName} ${voter.lastName}`
+      : voter.username || 'Un utilisateur';
+  
+    const existingVote = await this.prisma.vote.findFirst({
+      where: { reportId, userId },
+    });
+  
+    let updatedReport;
+  
+    if (existingVote) {
+      // Mise à jour si le vote est différent
+      if (existingVote.type !== type) {
+        await this.prisma.vote.update({
+          where: { id: existingVote.id },
+          data: { type },
+        });
+  
+        updatedReport = await this.prisma.report.update({
+          where: { id: reportId },
+          data: {
+            upVotes: type === 'up' ? { increment: 1 } : { decrement: 1 },
+            downVotes: type === 'down' ? { increment: 1 } : { decrement: 1 },
+          },
+        });
+      } else {
+        // Supprimer le vote si l'utilisateur clique sur le même bouton
+        await this.prisma.vote.delete({
+          where: { id: existingVote.id },
+        });
+  
+        updatedReport = await this.prisma.report.update({
+          where: { id: reportId },
+          data: {
+            upVotes: type === 'up' ? { decrement: 1 } : undefined,
+            downVotes: type === 'down' ? { decrement: 1 } : undefined,
+          },
+        });
       }
-
-      const report = await this.prisma.report.findUnique({
-        where: { id: reportId },
+    } else {
+      // Ajouter un nouveau vote
+      await this.prisma.vote.create({
+        data: { reportId, userId, type },
       });
-      if (!report) {
-        throw new NotFoundException(
-          `Signalement introuvable pour l'ID : ${reportId}`
-        );
-      }
-
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          firstName: true,
-          lastName: true,
-          username: true,
-          useFullName: true,
-        },
-      });
-      if (!user) {
-        throw new NotFoundException(
-          `Utilisateur introuvable pour l'ID : ${userId}`
-        );
-      }
-
-      const existingVote = await this.prisma.vote.findFirst({
-        where: { reportId, userId },
-      });
-
-      if (existingVote) {
-        throw new BadRequestException(
-          'Vous avez déjà voté pour ce signalement.'
-        );
-      }
-
-      const vote = await this.prisma.vote.create({
-        data: {
-          reportId,
-          userId,
-          type,
-        },
-      });
-
-      const updatedReport = await this.prisma.report.update({
+  
+      updatedReport = await this.prisma.report.update({
         where: { id: reportId },
         data: {
           upVotes: type === 'up' ? { increment: 1 } : undefined,
           downVotes: type === 'down' ? { increment: 1 } : undefined,
         },
       });
-
-      await this.updateUserTrustRate(userId);
-
-      try {
-        if (report.userId !== userId) {
-          const voteTypeText = type === 'up' ? 'positif' : 'négatif';
-
-          const voterName = user.useFullName
-            ? `${user.firstName} ${user.lastName}`
-            : user.username || 'Un utilisateur';
-
-          await this.notificationService.createNotification(
-            report.userId,
-            `${voterName} a laissé un vote ${voteTypeText} sur votre signalement.`,
-            'VOTE',
-            reportId, // `relatedId`
-            userId // `initiatorId`
-          );
-        }
-      } catch (error) {
-        console.error(
-          'Erreur lors de la création de la notification :',
-          error.message
+    }
+  
+    // Envoi de la notification au créateur du report
+    try {
+      if (report.userId !== userId) {
+        const voteType = type === 'up' ? 'positivement' : 'négativement';
+        await this.notificationService.createNotification(
+          report.userId,
+          `${voterName} a voté ${voteType} sur votre signalement.`,
+          'VOTE',
+          reportId, // relatedId : l'ID du signalement
+          userId // initiatorId : celui qui a voté
         );
       }
-
-      return {
-        message: 'Vote enregistré avec succès',
-        updatedVotes: {
-          upVotes: updatedReport.upVotes,
-          downVotes: updatedReport.downVotes,
-        },
-      };
     } catch (error) {
-      console.error('Erreur inattendue :', error);
-      throw new InternalServerErrorException(
-        "Erreur lors de l'enregistrement du vote"
+      console.error(
+        'Erreur lors de la création de la notification :',
+        error.message
       );
     }
+  
+    return {
+      message: 'Vote enregistré avec succès',
+      updatedVotes: {
+        upVotes: updatedReport.upVotes,
+        downVotes: updatedReport.downVotes,
+      },
+    };
   }
 
   async deleteComment(commentId: number, userId: number) {
