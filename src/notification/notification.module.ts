@@ -7,10 +7,10 @@ import { UserModule } from '../user/user.module';
 @Module({
   imports: [
     PrismaModule,
-    forwardRef(() => UserModule), // Utilise forwardRef pour éviter la boucle
+    forwardRef(() => UserModule), 
   ],
   controllers: [NotificationController],
   providers: [NotificationService],
-  exports: [NotificationService], // Exporte NotificationService si nécessaire
+  exports: [NotificationService], 
 })
 export class NotificationModule {}

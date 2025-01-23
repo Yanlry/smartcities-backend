@@ -34,6 +34,6 @@ import { MailModule } from './mails/mail.module';
     MailModule
   ],
   providers: [PrismaService, AppConfigService],
-  controllers: [AppConfigController], // Ajoute le contrôleur
+  controllers: [AppConfigController], 
 })
 export class AppModule {}

@@ -7,7 +7,7 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 import { S3Module } from '../services/s3/s3.module';
 
 @Module({
-  imports: [NotificationModule, PrismaModule, S3Module], // Ajoute NotificationModule ici
+  imports: [NotificationModule, PrismaModule, S3Module],
   controllers: [EventsController],
   providers: [EventsService, PrismaService],
 })

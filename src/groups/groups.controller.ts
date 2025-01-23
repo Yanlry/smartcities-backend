@@ -7,13 +7,11 @@ import { JoinGroupDto } from './dto/join-group.dto';
 export class GroupsController {
   constructor(private readonly groupsService: GroupsService) { }
 
-  // LISTE TOUS LES GROUPES
   @Get()
   async listGroups() {
     return this.groupsService.listGroups();
   }
 
-  // CRÉE UN NOUVEAU GROUPE
   @Post()
   async createGroup(@Body() createGroupDto: CreateGroupDto, @Body('ownerId') ownerId: number) {
     if (!ownerId) {
@@ -22,7 +20,6 @@ export class GroupsController {
     return this.groupsService.createGroup(createGroupDto, ownerId);
   }
 
-  // RÉCUPÈRE LES DÉTAILS D'UN GROUPE PAR SON ID
   @Get(':id')
   async getGroupById(@Param('id') id: string) {
     const groupId = parseInt(id, 10);
@@ -32,7 +29,6 @@ export class GroupsController {
     return this.groupsService.getGroupById(groupId);
   }
 
-  // REJOINDRE UN GROUPE
   @Post(':id/join')
   async joinGroup(@Param('id') groupId: string, @Body() body: { userId: number }) {
     if (!body.userId) {
@@ -42,7 +38,6 @@ export class GroupsController {
     return this.groupsService.joinGroup(id, body.userId);
   }
 
-  // QUITTER UN GROUPE
   @Post(':id/leave')
   async leaveGroup(@Param('id') id: string, @Body('userId') userId: number) {
     if (!userId) {
@@ -55,7 +50,6 @@ export class GroupsController {
     return this.groupsService.leaveGroup(groupId, userId);
   }
 
-  // RÉCUPÈRE LES MEMBRES D'UN GROUPE
   @Get(':id/members')
   async getGroupMembers(@Param('id') id: string) {
     const groupId = parseInt(id, 10);
@@ -65,7 +59,6 @@ export class GroupsController {
     return this.groupsService.getGroupMembers(groupId);
   }
 
-  // SUPPRIME UN GROUPE
   @Delete(':id')
   async deleteGroup(@Param('id') id: string, @Body('ownerId') ownerId: number) {
     if (!ownerId) {

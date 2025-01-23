@@ -27,11 +27,10 @@ export class AuthController {
     private readonly s3Service: S3Service
   ) {}
 
-  // CRÉE UN NOUVEL UTILISATEUR AVEC UN EMAIL, UN MOT DE PASSE ET UN NOM FOURNIS
   @Post('signup')
   @UseInterceptors(
     FilesInterceptor('photos', 1, {
-      limits: { fileSize: 10 * 1024 * 1024 }, // Limite à 10 Mo
+      limits: { fileSize: 10 * 1024 * 1024 }, 
     })
   )
   async signup(
@@ -54,7 +53,6 @@ export class AuthController {
       longitude,
     });
 
-    // Validation des coordonnées
     const latitudeNumber = parseFloat(latitude);
     const longitudeNumber = parseFloat(longitude);
 
@@ -64,7 +62,6 @@ export class AuthController {
       );
     }
 
-    // Filtrer les fichiers valides
     const validPhotos =
       photos?.filter(
         (file) => file.buffer && file.originalname && file.mimetype
@@ -92,7 +89,6 @@ export class AuthController {
 
     console.log('URLs des photos après upload :', photoUrls);
 
-    // Appel au service pour créer l'utilisateur
     return this.authService.signup(
       email,
       password,
@@ -100,14 +96,13 @@ export class AuthController {
       lastName,
       username,
       photoUrls,
-      nomCommune, // Nom de la ville
-      codePostal, // Code postal
-      latitudeNumber, // Latitude convertie
-      longitudeNumber // Longitude convertie
+      nomCommune, 
+      codePostal, 
+      latitudeNumber, 
+      longitudeNumber 
     );
   }
 
-  // AUTHENTIFIE UN UTILISATEUR ET RETOURNE UN TOKEN JWT S'IL RÉUSSIT
   @Post('login')
   async login(
     @Body('email') email: string,
@@ -120,10 +115,8 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async verifyToken(@Req() req: Request, @Res() res: Response) {
     try {
-      // Si tout va bien, le token est valide
       return res.status(HttpStatus.OK).json({ message: 'Token valide' });
     } catch (error) {
-      // Si le token est expiré, retournez une erreur explicite
       if (error.name === 'TokenExpiredError') {
         throw new UnauthorizedException(
           'Token expiré. Veuillez renouveler le token.'
@@ -133,7 +126,6 @@ export class AuthController {
     }
   }
 
-  // GÉNÈRE UN NOUVEAU TOKEN D'ACCÈS UTILISANT LE TOKEN DE RAFRAÎCHISSEMENT FOURNI, PROLONGEANT LA SESSION
   @Post('refresh-token')
   async refreshToken(
     @Body('userId') userId: number,
@@ -142,13 +134,11 @@ export class AuthController {
     return this.authService.refreshToken(refreshToken);
   }
 
-  // ENVOIE UN EMAIL AVEC UN LIEN ET UN TOKEN DE RÉINITIALISATION POUR REINITIALISER LE MOT DE PASSE
   @Post('forgot-password')
   async forgotPassword(@Body('email') email: string) {
     return this.authService.forgotPassword(email);
   }
 
-  // RÉINITIALISE LE MOT DE PASSE D'UN UTILISATEUR UTILISANT UN TOKEN DE RÉINITIALISATION ET UN NOUVEAU MOT DE PASSE
   @Post('reset-password')
   async resetPassword(
     @Body('resetToken') resetToken: string,

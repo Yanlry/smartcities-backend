@@ -17,7 +17,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const status =
       exception instanceof HttpException ? exception.getStatus() : 500;
 
-    // Récupération du message
     const exceptionResponse =
       exception instanceof HttpException
         ? exception.getResponse()
@@ -28,15 +27,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? exceptionResponse
         : (exceptionResponse as any).message;
 
-    // Log l'erreur pour le développement
     this.logger.error(
       `Status: ${status} - Error: ${JSON.stringify(exceptionResponse)}`
     );
 
-    // Envoi d'une réponse simplifiée au frontend
     response.status(status).json({
       statusCode: status,
-      message: Array.isArray(message) ? message[0] : message, // Si message est un tableau, on prend le premier élément
+      message: Array.isArray(message) ? message[0] : message,
       timestamp: new Date().toISOString(),
     });
   }

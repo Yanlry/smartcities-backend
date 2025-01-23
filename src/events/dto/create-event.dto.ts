@@ -9,32 +9,32 @@ export class CreateEventDto {
   @IsString()
   description?: string;
 
-  @IsDateString() // Assure que la date est au format ISO-8601
+  @IsDateString() 
   date: string;
 
   @IsOptional()
   @IsString()
   location?: string;
 
-  @Type(() => Number) // Force la transformation en nombre
-  @IsNumber() // Vérifie que c'est un nombre
+  @Type(() => Number) 
+  @IsNumber() 
   latitude: number;
 
-  @Type(() => Number) // Force la transformation en nombre
-  @IsNumber() // Vérifie que c'est un nombre
+  @Type(() => Number) 
+  @IsNumber() 
   longitude: number;
 
-  @Type(() => Number) // Force la transformation en nombre
-  @IsNumber() // Vérifie que c'est un nombre
+  @Type(() => Number) 
+  @IsNumber() 
   organizerId: number;
 
   @IsOptional()
-  @Type(() => Number) // Force la transformation en nombre
+  @Type(() => Number) 
   @IsNumber()
   reportId?: number;
 
   @IsOptional()
-  @Type(() => Number) // Force la transformation en nombre
+  @Type(() => Number) 
   @IsNumber()
   radius?: number;
 

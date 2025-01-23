@@ -1,5 +1,3 @@
-// auth/jwt.strategy.ts
-
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -17,13 +15,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: any) {
     console.log('Payload reçu dans JwtStrategy :', payload);
 
-    const userId = payload.userId || payload.sub; // Prise en charge de `sub` comme identifiant
+    const userId = payload.userId || payload.sub;
 
     if (!userId) {
-      console.error('Erreur : le payload est invalide ou ne contient pas userId');
+      console.error(
+        'Erreur : le payload est invalide ou ne contient pas userId'
+      );
       throw new UnauthorizedException('JWT invalide');
     }
 
-    return { id: userId, email: payload.email }; // Retourne l'utilisateur validé
+    return { id: userId, email: payload.email };
   }
 }

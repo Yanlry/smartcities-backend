@@ -9,8 +9,8 @@ import { S3Module } from 'src/services/s3/s3.module';
 @Module({
   imports: [
     JwtModule.register({
-      secret: 'secretKey', // Remplace par une clé secrète sécurisée
-      signOptions: { expiresIn: '1h' }, // Configure l'expiration du token
+      secret: 'secretKey',
+      signOptions: { expiresIn: '1h' }, 
     }), S3Module],
   providers: [AuthService, PrismaService, JwtStrategy],
   controllers: [AuthController],

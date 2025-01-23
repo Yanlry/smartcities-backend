@@ -54,13 +54,12 @@ export class MessagesService {
       },
     });
 
-    // Ajout du type et relatedId
     const notificationMessage = `Vous avez reçu un nouveau message de l'utilisateur ID ${data.senderId}`;
     await this.notificationService.createNotification(
-      data.recipientId,  // userId
-      notificationMessage,  // message
-      'message',  // type
-      message.id  // relatedId (ici, on passe l'ID du message)
+      data.recipientId,  
+      notificationMessage,  
+      'message',  
+      message.id 
     );
 
     return message;
@@ -84,10 +83,10 @@ async markMessagesAsRead(markReadDto: MarkReadDto) {
   const sender = conversation?.participants.find(participant => participant.id !== userId);
   if (sender) {
     await this.notificationService.createNotification(
-      sender.id,  // userId (l'expéditeur du message)
-      notificationMessage,  // message
-      'message',  // type (le type de notification, ici 'message')
-      conversationId  // relatedId (l'ID de la conversation, ici)
+      sender.id,
+      notificationMessage,
+      'message',
+      conversationId
     );
   }
 
@@ -163,10 +162,10 @@ async markMessagesAsRead(markReadDto: MarkReadDto) {
 
     const notificationMessage = `Vous avez reçu un nouveau message de l'utilisateur ID ${senderId}`;
     await this.notificationService.createNotification(
-      municipalityId,  // userId (la mairie)
-      notificationMessage,  // message
-      'message',  // type (le type de notification, ici 'message')
-      message.id  // relatedId (ID du message)
+      municipalityId,
+      notificationMessage,
+      'message',
+      message.id
     );
     return message;
   }

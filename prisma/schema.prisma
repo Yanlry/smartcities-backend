@@ -35,7 +35,7 @@ model User {
   likes                     Like[]
   messages                  Message[]                  @relation("UserMessages")
   notifications             Notification[]             @relation("UserNotifications")
-  initiatedNotifications    Notification[]             @relation("NotificationInitiator") // Champ opposé
+  initiatedNotifications    Notification[]             @relation("NotificationInitiator") 
   notificationSubscriptions NotificationSubscription[]
   photos                    Photo[]
   posts                     Post[]
@@ -53,15 +53,15 @@ model Notification {
   isRead       Boolean  @default(false)
   createdAt    DateTime @default(now())
   userId       Int
-  initiatorId  Int?     // Nouvel attribut pour l'initiateur de l'action
+  initiatorId  Int?    
   type         String
   relatedId    String
-  eventId      Int?     // Ajout de l'attribut eventId pour relier une notification à un événement
+  eventId      Int?    
   updatedAt    DateTime @updatedAt
 
   user         User     @relation("UserNotifications", fields: [userId], references: [id])
   initiator    User?    @relation("NotificationInitiator", fields: [initiatorId], references: [id])
-  event        Event?   @relation(fields: [eventId], references: [id]) // Relation avec Event
+  event        Event?   @relation(fields: [eventId], references: [id])
 }
 
 model UserFollow {
@@ -158,7 +158,7 @@ model Post {
   comments  Comment[]
   likes     Like[]
   author    User      @relation(fields: [authorId], references: [id])
-  photos    Photo[]   // Relation avec les photos
+  photos    Photo[]  
 }
 
 model Event {
@@ -178,7 +178,7 @@ model Event {
   photos        Photo[]
   reports       Report[]       @relation("EventReports")
   votes         Vote[]         @relation("EventVotes")
-  notifications Notification[] // Relation inverse vers Notification
+  notifications Notification[] 
 }
 
 model Photo {
@@ -188,7 +188,7 @@ model Photo {
   createdAt DateTime @default(now())
   reportId  Int?
   userId    Int?
-  postId    Int?     // Nouvelle relation avec Post
+  postId    Int?     
   isProfile Boolean  @default(false)
   event     Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   report    Report?  @relation(fields: [reportId], references: [id], onDelete: Cascade)

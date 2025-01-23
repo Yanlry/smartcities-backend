@@ -38,7 +38,7 @@ export class PostsController {
   @Post()
   @UseInterceptors(
     FilesInterceptor('photos', 5, {
-      limits: { fileSize: 10 * 1024 * 1024 }, // Limite à 10 Mo par fichier
+      limits: { fileSize: 10 * 1024 * 1024 }, 
     })
   )
   async createPost(
@@ -55,7 +55,6 @@ export class PostsController {
 
     this.logger.debug('Valid Files:', validPhotos);
 
-    // Upload des photos sur AWS S3
     const photoUrls = [];
     for (const photo of validPhotos) {
       try {
@@ -79,7 +78,6 @@ export class PostsController {
 
     this.logger.debug('All uploaded photo URLs:', photoUrls);
 
-    // Appel au service pour créer le post
     try {
       const post = await this.postsService.createPost(createPostDto, photoUrls);
       this.logger.log('Post created successfully:', post);
@@ -94,29 +92,26 @@ export class PostsController {
 
   // LISTE LES PUBLICATIONS
   @Get()
-@UseGuards(JwtAuthGuard) // Protéger la route avec le guard JWT
+@UseGuards(JwtAuthGuard) 
 async listPosts(@Query() filters: any, @Req() req: any) {
-  const user = req.user; // Récupère l'utilisateur validé par JwtStrategy
+  const user = req.user; 
 
   if (!user || !user.id) {
     throw new UnauthorizedException('Utilisateur non authentifié');
   }
 
-  // Passer les `filters` et l'ID utilisateur au service
   return this.postsService.listPosts(filters, user.id);
 }
 
-  // RÉCUPÈRE LES DÉTAILS D'UNE PUBLICATION SPÉCIFIQUE
 // RÉCUPÈRE LES DÉTAILS D'UNE PUBLICATION SPÉCIFIQUE
 @Get(':id')
-@UseGuards(JwtAuthGuard) // Protéger la route avec le guard JWT
+@UseGuards(JwtAuthGuard) 
 async getPostById(@Param('id') id: string, @Req() req: any) {
-  const user = req.user; // Récupère l'utilisateur connecté
+  const user = req.user; 
   if (!user || !user.id) {
     throw new UnauthorizedException('Utilisateur non authentifié');
   }
 
-  // Passer l'ID de l'utilisateur au service
   return this.postsService.getPostById(Number(id), user.id);
 }
 
@@ -151,7 +146,7 @@ async getPostById(@Param('id') id: string, @Req() req: any) {
     }
   }
 
-  // Supprime un commentaire par son ID
+  // SUPPRIME UN COMMENTAIRE
   @Delete('comments/:id')
   async deleteCommentById(@Param('id', ParseIntPipe) id: number) {
     try {

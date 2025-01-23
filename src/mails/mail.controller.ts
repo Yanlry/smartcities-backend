@@ -17,9 +17,9 @@ export class MailController {
       subject: string;
       reporterId: string;
       reportReason: string;
-      userId?: string; // Optionnel pour les profils
-      conversationId?: string; // Optionnel pour les conversations
-      commentId?: string; // Optionnel pour les commentaires
+      userId?: string; 
+      conversationId?: string;
+      commentId?: string;
     },
   ) {
     console.log('Données reçues dans le backend :', body);
@@ -37,7 +37,7 @@ export class MailController {
       reportReason,
       userId,
       conversationId,
-      commentId, // Inclure commentId
+      commentId, 
     });
   
     return { message: 'Email envoyé avec succès' };

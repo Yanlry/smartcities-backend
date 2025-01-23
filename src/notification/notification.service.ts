@@ -8,13 +8,13 @@ import {
   forwardRef
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserService } from '../user/user.service'; // Importer UserService
+import { UserService } from '../user/user.service'; 
 
 @Injectable()
 export class NotificationService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(forwardRef(() => UserService)) // Injection avec forwardRef
+    @Inject(forwardRef(() => UserService)) 
     private readonly userService: UserService
   ) {}
 
@@ -47,7 +47,7 @@ export class NotificationService {
     const unreadNotifications = await this.prisma.notification.findMany({
       where: {
         userId,
-        isRead: false, // Filtre les notifications non lues
+        isRead: false, 
       },
       include: {
         initiator: {
@@ -131,7 +131,7 @@ export class NotificationService {
     userId: number,
     message: string,
     type: string,
-    relatedId: number | string, // Permettre les deux types pour plus de flexibilité
+    relatedId: number | string, 
     initiatorId?: number
 ) {
     try {
@@ -142,7 +142,7 @@ export class NotificationService {
                 message,
                 isRead: false,
                 type,
-                relatedId: String(relatedId), // Convertir en chaîne
+                relatedId: String(relatedId),
                 initiatorId,
             },
         });
@@ -169,7 +169,6 @@ export class NotificationService {
     let organizerId: number | undefined;
 
     if (type === 'event') {
-      // Récupère l'`organizerId` seulement si c'est un événement
       const event = await this.prisma.event.findUnique({
         where: { id },
         select: { organizerId: true },
@@ -177,12 +176,11 @@ export class NotificationService {
 
       if (!event) throw new NotFoundException('Événement non trouvé');
 
-      organizerId = event.organizerId; // Assigner l'ID de l'organisateur
+      organizerId = event.organizerId; 
     }
 
-    // Récupérer les abonnés ou participants à notifier
     const subscribers = await this.prisma.notificationSubscription.findMany({
-      where: { userId: { not: organizerId } }, // Ne pas inclure l'organisateur dans les notifications
+      where: { userId: { not: organizerId } }, 
     });
 
     for (const subscriber of subscribers) {
@@ -249,7 +247,6 @@ export class NotificationService {
           };
         }
 
-        // Utiliser userService.getUserById
         const initiatorDetails = await this.userService.getUserById(notification.initiatorId);
 
         return {
@@ -262,16 +259,15 @@ export class NotificationService {
     return enrichedNotifications;
   }
   
-  // Récupérer les abonnés (excluant l'utilisateur lui-même)
   async getSubscribers(excludingUserId: number) {
     return this.prisma.notificationSubscription.findMany({
       where: {
         userId: {
-          not: excludingUserId, // Exclure l'utilisateur qui envoie la notification
+          not: excludingUserId, 
         },
       },
       select: {
-        userId: true, // Récupérer uniquement l'ID des abonnés
+        userId: true, 
       },
     });
   }
@@ -302,7 +298,6 @@ export class NotificationService {
 
   // TODO : ABONNEMENT AUX NOTIFICATIONS DE PROXIMITÉ
   async subscribeToNotifications(userId: number) {
-    // Logique d'abonnement (par exemple, ajouter une préférence de notification pour l'utilisateur)
     return { message: 'Abonnement aux notifications de proximité réussi.' };
   }
 
@@ -340,7 +335,6 @@ export class NotificationService {
   ): Promise<{ message: string }> {
     console.log('Demande de suppression pour :', { notificationId, userId });
   
-    // Vérification de l'existence de la notification
     const notification = await this.prisma.notification.findUnique({
       where: { id: notificationId },
     });
@@ -352,7 +346,6 @@ export class NotificationService {
       throw new NotFoundException('Notification introuvable.');
     }
   
-    // Vérification des permissions
     if (notification.userId !== userId) {
       console.error('Utilisateur non autorisé à supprimer cette notification :', {
         notificationUserId: notification.userId,
@@ -364,7 +357,6 @@ export class NotificationService {
     }
   
     try {
-      // Suppression de la notification
       const deletedNotification = await this.prisma.notification.delete({
         where: { id: notificationId },
       });

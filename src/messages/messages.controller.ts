@@ -34,8 +34,8 @@ export class MessagesController {
     // RÉCUPÉRER LES MESSAGES D'UNE MAIRIE POUR UN UTILISATEUR (SEULS LES ABONNÉS)
     @Get('municipality/:municipalityId')
     getMunicipalityMessages(
-        @Query('userId') userId: string, // ID de l'utilisateur
-        @Param('municipalityId') municipalityId: string // ID de la mairie
+        @Query('userId') userId: string,
+        @Param('municipalityId') municipalityId: string 
     ) {
         return this.messagesService.getMunicipalityMessages(Number(userId), Number(municipalityId));
     }

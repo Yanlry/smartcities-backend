@@ -30,7 +30,7 @@ export class EventsController {
   @Post()
   @UseInterceptors(
     FilesInterceptor('photos', 7, {
-      limits: { fileSize: 10 * 1024 * 1024 }, // Limite à 10 Mo
+      limits: { fileSize: 10 * 1024 * 1024 },
     })
   )
   async create(
@@ -45,7 +45,6 @@ export class EventsController {
       throw new BadRequestException('Aucun fichier reçu.');
     }
 
-    // Filtrer les fichiers valides
     const validPhotos = photos.filter(
       (file) => file.buffer && file.originalname && file.mimetype
     );
@@ -77,7 +76,6 @@ export class EventsController {
 
     this.logger.debug('All uploaded photo URLs:', photoUrls);
 
-    // Appel au service pour créer l'événement
     try {
       const event = await this.eventsService.create(createEventDto, photoUrls);
       this.logger.log('Event created successfully:', event);
@@ -105,7 +103,7 @@ export class EventsController {
     @Param('eventId') eventId: number,
     @Query('userId') userId: number
   ) {
-    return this.eventsService.isRegistered(eventId, userId); // Appel au service
+    return this.eventsService.isRegistered(eventId, userId);
   }
 
   @Post(':eventId/join')
@@ -123,7 +121,6 @@ export class EventsController {
     }
   }
 
-  // RÉCUPÈRE LES DÉTAILS D'UN ÉVÉNEMENT PAR SON ID
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.eventsService.findOne(+id);
@@ -135,7 +132,6 @@ export class EventsController {
     return this.eventsService.update(+id, updateEventDto);
   }
 
-  // INVITE UN UTILISATEUR À UN ÉVÉNEMENT
   @Post(':id/invite')
   async inviteUser(
     @Param('id') eventId: string,
@@ -150,7 +146,6 @@ export class EventsController {
     return this.eventsService.inviteUser(id, body.userId);
   }
 
-  // RÉPOND À UNE INVITATION POUR UN ÉVÉNEMENT
   @Post(':id/rsvp')
   async rsvpToEvent(
     @Param('id') eventId: string,
@@ -164,13 +159,11 @@ export class EventsController {
     const id = parseInt(eventId, 10);
     return this.eventsService.rsvpToEvent(id, body.userId, body.status);
   }
-
-  // SUPPRIME UN ÉVÉNEMENT
-// events.controller.ts
-@Delete(':id')
-remove(@Param('id') id: number, @Query('userId') userId: number) {
-  return this.eventsService.remove(id, userId);
-}
+  
+  @Delete(':id')
+  remove(@Param('id') id: number, @Query('userId') userId: number) {
+    return this.eventsService.remove(id, userId);
+  }
 
   @Delete(':eventId/leave')
   async leaveEvent(
