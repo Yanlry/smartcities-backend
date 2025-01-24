@@ -8,7 +8,7 @@ export class PrismaService
 {
   constructor() {
     super({
-      log: ['query', 'info', 'warn', 'error'], // Active les logs Prisma
+      log: ['query', 'info', 'warn', 'error'],
     });
   }
 
@@ -20,9 +20,8 @@ export class PrismaService
     } catch (error) {
       console.error('Erreur lors de la connexion à la base de données :', error.message);
 
-      // Reconnexion après un délai (en cas de problème temporaire)
       console.log('Nouvelle tentative de connexion dans 5 secondes...');
-      await new Promise((resolve) => setTimeout(resolve, 5000)); // Délai de 5 secondes
+      await new Promise((resolve) => setTimeout(resolve, 5000)); 
       try {
         await this.$connect();
         console.log('Connexion réussie après une seconde tentative.');
@@ -31,7 +30,7 @@ export class PrismaService
           'Échec de la reconnexion à la base de données :',
           retryError.message
         );
-        process.exit(1); // Arrête l'application si la base est inaccessible
+        process.exit(1); 
       }
     }
   }

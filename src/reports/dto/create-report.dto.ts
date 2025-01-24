@@ -15,6 +15,6 @@ export class CreateReportDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true }) // Chaque élément du tableau doit être une chaîne
-  photoUrls?: string[]; // Optionnel, car les fichiers peuvent ne pas être envoyés
+  @IsString({ each: true }) 
+  photoUrls?: string[]; 
 }

@@ -20,7 +20,7 @@ async uploadFile(file: Express.Multer.File): Promise<string> {
 
   const params: AWS.S3.PutObjectRequest = {
     Bucket: process.env.AWS_BUCKET_NAME,
-    Key: `${Date.now()}-${file.originalname}`, // Unique file name
+    Key: `${Date.now()}-${file.originalname}`, 
     Body: file.buffer,
     ContentType: file.mimetype,
   };
@@ -28,7 +28,7 @@ async uploadFile(file: Express.Multer.File): Promise<string> {
   try {
     const uploadResult = await this.s3.upload(params).promise();
     console.log('File uploaded successfully:', uploadResult);
-    return uploadResult.Location; // URL of the uploaded file
+    return uploadResult.Location; 
   } catch (error) {
     console.error('Error uploading file to S3:', error);
     throw new Error(`Failed to upload file to S3: ${error.message}`);
@@ -41,7 +41,7 @@ async updateFile(oldFileUrl: string, newFile: Express.Multer.File): Promise<stri
   }
 
   const bucketName = process.env.AWS_BUCKET_NAME;
-  const oldFileKey = oldFileUrl.split(`${bucketName}/`)[1]; // Extract the key from the old URL
+  const oldFileKey = oldFileUrl.split(`${bucketName}/`)[1];
 
   if (!oldFileKey) {
     throw new Error('Could not extract file key from URL.');
@@ -49,7 +49,7 @@ async updateFile(oldFileUrl: string, newFile: Express.Multer.File): Promise<stri
 
   const params: AWS.S3.PutObjectRequest = {
     Bucket: bucketName,
-    Key: oldFileKey, // Reuse the key to replace the file
+    Key: oldFileKey,
     Body: newFile.buffer,
     ContentType: newFile.mimetype,
   };
@@ -67,8 +67,8 @@ async updateFile(oldFileUrl: string, newFile: Express.Multer.File): Promise<stri
 
   /**
    * Delete a file from S3.
-   * @param fileUrl The URL of the file to delete.
-   * @returns A promise that resolves when the file is deleted.
+   * @param fileUrl 
+   * @returns 
    */
   async deleteFile(fileUrl: string): Promise<void> {
     if (!fileUrl) {

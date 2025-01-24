@@ -20,7 +20,6 @@ export class ReportService {
     console.log('Données reçues :', reportData);
     console.log('Photo URLs reçues :', photoUrls);
 
-    // Validation des champs obligatoires
     if (
       !reportData.title ||
       !reportData.description ||
@@ -42,7 +41,6 @@ export class ReportService {
       );
     }
 
-    // Conversion des coordonnées et de l'identifiant utilisateur
     const latitude = parseFloat(reportData.latitude.toString());
     const longitude = parseFloat(reportData.longitude.toString());
     const userId = parseInt(reportData.userId.toString(), 10);
@@ -53,7 +51,6 @@ export class ReportService {
       );
     }
 
-    // Vérification de l'utilisateur
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     console.log('Utilisateur trouvé :', user);
 
@@ -61,7 +58,6 @@ export class ReportService {
       throw new BadRequestException('Utilisateur non trouvé.');
     }
 
-    // Mise à jour des coordonnées utilisateur si elles sont absentes
     if (!user.latitude || !user.longitude) {
       console.log("Mise à jour des coordonnées de l'utilisateur...");
       await this.prisma.user.update({
@@ -73,7 +69,6 @@ export class ReportService {
       });
     }
 
-    // Création du signalement dans la base de données
     const report = await this.prisma.report.create({
       data: {
         title: reportData.title,
@@ -89,7 +84,6 @@ export class ReportService {
 
     console.log('Signalement créé :', report);
 
-    // Ajout des photos au signalement
     if (photoUrls.length > 0) {
       const photosData = photoUrls.map((url) => ({
         url,
@@ -103,7 +97,6 @@ export class ReportService {
       });
     }
 
-    // Envoi de notifications aux abonnés proches
     if (reportData.city) {
       const nearbySubscribers =
         await this.prisma.notificationSubscription.findMany({
@@ -140,16 +133,16 @@ export class ReportService {
 
   async listReports(filters: any) {
     const { latitude, longitude, radiusKm, userId, ...otherFilters } = filters;
-  
+
     let where: any = { ...otherFilters };
-  
+
     if (userId) {
       where.userId = Number(userId);
     }
-  
+
     if (latitude && longitude && radiusKm) {
       const radiusInDegrees = Number(radiusKm) / 111;
-  
+
       where.latitude = {
         gte: Number(latitude) - radiusInDegrees,
         lte: Number(latitude) + radiusInDegrees,
@@ -159,7 +152,7 @@ export class ReportService {
         lte: Number(longitude) + radiusInDegrees,
       };
     }
-  
+
     const reports = await this.prisma.report.findMany({
       where,
       select: {
@@ -186,7 +179,7 @@ export class ReportService {
         },
       },
     });
-  
+
     const calculateDistance = (
       lat1: number,
       lon1: number,
@@ -208,7 +201,7 @@ export class ReportService {
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     };
-  
+
     const reportsWithDistances = await Promise.all(
       reports.map(async (report) => {
         const distance = calculateDistance(
@@ -217,16 +210,16 @@ export class ReportService {
           report.latitude,
           report.longitude
         );
-  
+
         const upVotes = report.votes.filter(
           (vote) => vote.type === 'up'
         ).length;
         const downVotes = report.votes.filter(
           (vote) => vote.type === 'down'
         ).length;
-  
+
         const trustRate = await this.calculateTrustRate(report.userId);
-  
+
         return {
           ...report,
           distance,
@@ -237,7 +230,7 @@ export class ReportService {
         };
       })
     );
-  
+
     return reportsWithDistances.sort((a, b) => a.distance - b.distance);
   }
 
@@ -253,19 +246,18 @@ export class ReportService {
   // SERVICE : Récupère les statistiques des signalements par catégorie
   async getStatisticsByCategoryForCity(nomCommune: string) {
     const statistics = await this.prisma.report.groupBy({
-      by: ['type'], // Regroupe par type (catégorie)
+      by: ['type'], 
       _count: {
-        type: true, // Compte le nombre de chaque type
+        type: true, 
       },
       where: {
         city: {
-          contains: nomCommune, // Vérifie que la ville correspond à la commune
-          mode: 'insensitive', // Rendre la recherche insensible à la casse
+          contains: nomCommune, 
+          mode: 'insensitive',
         },
       },
     });
-  
-    // Formate les données pour le frontend
+
     return statistics.map((stat) => ({
       label: stat.type,
       count: stat._count.type,
@@ -277,20 +269,17 @@ export class ReportService {
     lon1: number,
     userId: number
   ): Promise<boolean> {
-    // Récupérer les coordonnées de l'utilisateur
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { latitude: true, longitude: true },
     });
 
-    // Vérification des coordonnées de l'utilisateur
     if (!user || user.latitude === null || user.longitude === null) {
       throw new BadRequestException(
         'Utilisateur non trouvé ou coordonnées manquantes'
       );
     }
 
-    // Calculer la distance
     const distance = this.calculateDistance(
       lat1,
       lon1,
@@ -302,7 +291,6 @@ export class ReportService {
     console.log('Coordonnées signalement :', lat1, lon1);
     console.log('Distance calculée :', distance);
 
-    // Vérifier si la distance est inférieure ou égale à 50 mètres
     return distance <= 50;
   }
 
@@ -312,7 +300,7 @@ export class ReportService {
     lat2: number,
     lon2: number
   ): number {
-    const R = 6371e3; // Rayon de la Terre en mètres
+    const R = 6371e3; 
     const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
 
     const φ1 = toRadians(lat1);
@@ -325,7 +313,7 @@ export class ReportService {
       Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    return R * c; // Distance en mètres
+    return R * c; 
   }
 
   // MISE À JOUR DU TRUST RATE DE L'UTILISATEUR
@@ -371,7 +359,7 @@ export class ReportService {
         trustRate -= 1;
       }
     });
-    return validVotes > 0 ? trustRate / validVotes : 0; // Moyenne des votes valides
+    return validVotes > 0 ? trustRate / validVotes : 0; 
   }
 
   async getReporById(
@@ -385,7 +373,6 @@ export class ReportService {
       throw new BadRequestException('ID invalide');
     }
 
-    // Récupération complète du rapport
     const report = await this.prisma.report.findUnique({
       where: { id: numericId },
       select: {
@@ -399,8 +386,8 @@ export class ReportService {
           select: {
             id: true,
             username: true,
-            useFullName: true, // Ajout
-            firstName: true, // Ajout
+            useFullName: true, 
+            firstName: true, 
             lastName: true,
           },
         },
@@ -424,7 +411,6 @@ export class ReportService {
       throw new NotFoundException('Signalement introuvable');
     }
 
-    // Fonction récursive pour récupérer les commentaires imbriqués
     const fetchCommentsWithReplies = async (parentId: number | null) => {
       const comments = await this.prisma.comment.findMany({
         where: { reportId: numericId, parentId },
@@ -455,13 +441,12 @@ export class ReportService {
                   lastName: true,
                 },
               },
-              replies: true, // Récursivité incluse
+              replies: true, 
             },
           },
         },
       });
 
-      // Ajout récursif des réponses
       return await Promise.all(
         comments.map(async (comment) => ({
           ...comment,
@@ -470,10 +455,8 @@ export class ReportService {
       );
     };
 
-    // Récupération des commentaires principaux et leurs réponses
     const comments = await fetchCommentsWithReplies(null);
 
-    // Calcul de la distance
     let distance = null;
     if (latitude !== undefined && longitude !== undefined) {
       const calculateDistance = (
@@ -508,13 +491,11 @@ export class ReportService {
       );
     }
 
-    // Calcul des votes
     const upVotes = report.votes.filter((vote) => vote.type === 'up').length;
     const downVotes = report.votes.filter(
       (vote) => vote.type === 'down'
     ).length;
 
-    // Retourne le rapport avec commentaires imbriqués
     return {
       ...report,
       comments,
@@ -536,7 +517,7 @@ export class ReportService {
             lastName: true,
             useFullName: true,
             photos: {
-              where: { isProfile: true }, // Récupère uniquement la photo de profil
+              where: { isProfile: true },
               select: { url: true },
             },
           },
@@ -551,7 +532,7 @@ export class ReportService {
                 lastName: true,
                 useFullName: true,
                 photos: {
-                  where: { isProfile: true }, // Récupère uniquement la photo de profil
+                  where: { isProfile: true },
                   select: { url: true },
                 },
               },
@@ -561,7 +542,6 @@ export class ReportService {
       },
     });
 
-    // Enrichir chaque commentaire avec `profilePhoto`
     return comments.map((comment) => ({
       ...comment,
       user: {
@@ -634,8 +614,8 @@ export class ReportService {
           report.userId,
           `${commenterName} a commenté votre signalement.`,
           'COMMENT',
-          reportId, // `relatedId`
-          userId // `initiatorId` (celui qui commente)
+          reportId, 
+          userId 
         );
       }
     } catch (error) {
@@ -658,14 +638,21 @@ export class ReportService {
   }
 
   async updateReport(id: number, updateData: any) {
-    console.log("ID reçu :", id);
-    console.log("Données brutes reçues :", updateData);
-  
+    console.log('ID reçu :', id);
+    console.log('Données brutes reçues :', updateData);
+
     try {
-      const { userId, createdAt, votes, photos, trustRate, distance, ...filteredData } = updateData;
-      console.log("Données filtrées pour mise à jour :", filteredData);
-  
-      // Mise à jour des champs simples
+      const {
+        userId,
+        createdAt,
+        votes,
+        photos,
+        trustRate,
+        distance,
+        ...filteredData
+      } = updateData;
+      console.log('Données filtrées pour mise à jour :', filteredData);
+
       const report = await this.prisma.report.update({
         where: { id },
         data: {
@@ -673,44 +660,44 @@ export class ReportService {
           user: userId ? { connect: { id: userId } } : undefined,
         },
       });
-  
-      console.log("Mise à jour Prisma réussie :", report);
-  
-      // Gestion des photos
-      console.log("Suppression des anciennes photos...");
+
+      console.log('Mise à jour Prisma réussie :', report);
+
+      console.log('Suppression des anciennes photos...');
       await this.prisma.photo.deleteMany({
         where: { reportId: id },
       });
-  
+
       if (photos && photos.length > 0) {
-        console.log("Photos reçues pour ajout :", photos);
-  
-        // Filtrage et transformation des photos
+        console.log('Photos reçues pour ajout :', photos);
+
         const validPhotos = photos
-          .filter((photo) => photo.uri || photo.url) // Vérifie qu'une URL est présente
+          .filter((photo) => photo.uri || photo.url) 
           .map((photo) => ({
-            url: photo.url || photo.uri, // Priorise `url`, utilise `uri` si `url` est absent
+            url: photo.url || photo.uri,
             reportId: id,
           }));
-  
-        console.log("Photos valides après transformation :", validPhotos);
-  
+
+        console.log('Photos valides après transformation :', validPhotos);
+
         if (validPhotos.length > 0) {
-          console.log("Ajout des nouvelles photos...");
+          console.log('Ajout des nouvelles photos...');
           await this.prisma.photo.createMany({
             data: validPhotos,
           });
         } else {
-          console.log("Aucune photo valide à ajouter.");
+          console.log('Aucune photo valide à ajouter.');
         }
       } else {
-        console.log("Aucune nouvelle photo reçue, seulement suppression.");
+        console.log('Aucune nouvelle photo reçue, seulement suppression.');
       }
-  
+
       return report;
     } catch (error) {
-      console.error("Erreur dans Prisma :", error);
-      throw new BadRequestException("Impossible de mettre à jour le signalement.");
+      console.error('Erreur dans Prisma :', error);
+      throw new BadRequestException(
+        'Impossible de mettre à jour le signalement.'
+      );
     }
   }
 
@@ -729,19 +716,21 @@ export class ReportService {
     longitude: number;
   }) {
     const { reportId, userId, type } = voteData;
-  
+
     if (!type || !['up', 'down'].includes(type)) {
       throw new BadRequestException('Type de vote invalide.');
     }
-  
+
     const report = await this.prisma.report.findUnique({
       where: { id: reportId },
     });
-  
+
     if (!report) {
-      throw new NotFoundException(`Signalement introuvable pour l'ID : ${reportId}`);
+      throw new NotFoundException(
+        `Signalement introuvable pour l'ID : ${reportId}`
+      );
     }
-  
+
     const voter = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -751,29 +740,28 @@ export class ReportService {
         useFullName: true,
       },
     });
-  
+
     if (!voter) {
       throw new NotFoundException('Utilisateur introuvable.');
     }
-  
+
     const voterName = voter.useFullName
       ? `${voter.firstName} ${voter.lastName}`
       : voter.username || 'Un utilisateur';
-  
+
     const existingVote = await this.prisma.vote.findFirst({
       where: { reportId, userId },
     });
-  
+
     let updatedReport;
-  
+
     if (existingVote) {
-      // Mise à jour si le vote est différent
       if (existingVote.type !== type) {
         await this.prisma.vote.update({
           where: { id: existingVote.id },
           data: { type },
         });
-  
+
         updatedReport = await this.prisma.report.update({
           where: { id: reportId },
           data: {
@@ -782,11 +770,10 @@ export class ReportService {
           },
         });
       } else {
-        // Supprimer le vote si l'utilisateur clique sur le même bouton
         await this.prisma.vote.delete({
           where: { id: existingVote.id },
         });
-  
+
         updatedReport = await this.prisma.report.update({
           where: { id: reportId },
           data: {
@@ -796,11 +783,10 @@ export class ReportService {
         });
       }
     } else {
-      // Ajouter un nouveau vote
       await this.prisma.vote.create({
         data: { reportId, userId, type },
       });
-  
+
       updatedReport = await this.prisma.report.update({
         where: { id: reportId },
         data: {
@@ -809,8 +795,7 @@ export class ReportService {
         },
       });
     }
-  
-    // Envoi de la notification au créateur du report
+
     try {
       if (report.userId !== userId) {
         const voteType = type === 'up' ? 'positivement' : 'négativement';
@@ -818,8 +803,8 @@ export class ReportService {
           report.userId,
           `${voterName} a voté ${voteType} sur votre signalement.`,
           'VOTE',
-          reportId, // relatedId : l'ID du signalement
-          userId // initiatorId : celui qui a voté
+          reportId,
+          userId 
         );
       }
     } catch (error) {
@@ -828,7 +813,7 @@ export class ReportService {
         error.message
       );
     }
-  
+
     return {
       message: 'Vote enregistré avec succès',
       updatedVotes: {
@@ -848,7 +833,7 @@ export class ReportService {
 
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
-      include: { parent: true }, // Inclure le parent pour vérifier la relation
+      include: { parent: true }, 
     });
 
     if (!comment) {
@@ -856,7 +841,6 @@ export class ReportService {
       throw new NotFoundException('Commentaire introuvable.');
     }
 
-    // Vérifiez si l'utilisateur est l'auteur du commentaire ou d'une réponse
     if (comment.userId !== userId) {
       console.log(
         "Tentative de suppression non autorisée par l'utilisateur:",

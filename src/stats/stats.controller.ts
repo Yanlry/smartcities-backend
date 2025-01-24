@@ -1,4 +1,3 @@
-// src/stats/stats.controller.ts
 import { Controller, Get, Query, Param } from '@nestjs/common';
 import { StatsService } from './stats.service';
 
@@ -6,7 +5,7 @@ import { StatsService } from './stats.service';
 export class StatsController {
   constructor(private readonly statsService: StatsService) {}
 
-  // Récupérer les signalements par localisation (latitude et longitude)
+  // Récupérer les signalements par localisation 
   @Get('report-by-location')
   async getReportsByLocation(
     @Query('latitude') latitude: number, 
@@ -15,7 +14,7 @@ export class StatsController {
     return this.statsService.getReportsByLocation(latitude, longitude);
   }
 
-   // Récupérer les signalements par type (ex: "SECURITY", "pollution", etc.)
+   // Récupérer les signalements par type 
    @Get('reports-by-type/:type')
    async getReportsByType(@Param('type') type: string) {
      return this.statsService.getReportsByType(type);
@@ -34,8 +33,8 @@ export class StatsController {
 
  // Route pour récupérer les statistiques d'un événement
 @Get('event/:eventId')
-async getEventStats(@Param('eventId') eventId: string) {  // Assurez-vous que le nom de paramètre est 'eventId'
-  return this.statsService.getEventStats(Number(eventId));  // Convertir l'ID en nombre avant de le passer à la méthode
+async getEventStats(@Param('eventId') eventId: string) { 
+  return this.statsService.getEventStats(Number(eventId));  
 }
 
 }

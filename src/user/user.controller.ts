@@ -17,7 +17,7 @@ import {
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // Pour sécuriser l'accès avec un token JWT
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { S3Service } from 'src/services/s3/s3.service';
 import { HttpException } from '@nestjs/common/exceptions/http.exception';
@@ -73,7 +73,6 @@ export class UserController {
   async updateDisplayPreference(
     @Body() { userId, useFullName }: { userId: number; useFullName: boolean }
   ) {
-    // Vérifie si l'utilisateur existe
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -82,13 +81,12 @@ export class UserController {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
-    // Met à jour la préférence
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: { useFullName },
     });
 
-    return updatedUser; // Retourne l'utilisateur mis à jour
+    return updatedUser;
   }
 
   @Post('show-email')
@@ -99,7 +97,7 @@ export class UserController {
   // RÉCUPÈRE LE PROFIL D'UN UTILISATEUR PAR SON ID
   @Get(':id')
   async getUserById(@Param('id') id: string) {
-    const userId = parseInt(id, 10); // Convertit l'ID de chaîne en nombre
+    const userId = parseInt(id, 10);
     if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
     return this.userService.getUserById(userId);
   }
@@ -107,13 +105,13 @@ export class UserController {
   @Post(':userId/profile-image')
   @UseInterceptors(
     FilesInterceptor('profileImage', 1, {
-      limits: { fileSize: 15 * 1024 * 1024 }, // Limite de 10 Mo
+      limits: { fileSize: 15 * 1024 * 1024 },
     })
   )
   async updateProfileImage(
     @Param('userId') userId: number,
     @UploadedFiles() files: Express.Multer.File[],
-    @Request() req: Request // Pour inspecter les en-têtes et le corps brut si nécessaire
+    @Request() req: Request
   ) {
     console.log('Requête reçue - Headers :', req.headers);
     console.log('Requête reçue - Content-Type :', req.headers['content-type']);
@@ -162,27 +160,22 @@ export class UserController {
     @Body('followerId') followerId: number
   ) {
     try {
-      // Appelle le service pour effectuer le suivi
       const follow = await this.userService.followUser(+userId, followerId);
 
-      // Retourne une réponse de succès
       return {
         success: true,
         message: 'Utilisateur suivi avec succès.',
         data: follow,
       };
     } catch (error) {
-      // Log de l'erreur
       console.error("Erreur lors du suivi de l'utilisateur :", error.message);
 
-      // Gestion des erreurs en fonction du type d'exception
       if (error instanceof NotFoundException) {
         throw new NotFoundException(error.message);
       } else if (error instanceof BadRequestException) {
         throw new BadRequestException(error.message);
       }
 
-      // Erreur générique
       throw new HttpException(
         "Une erreur interne s'est produite lors du suivi.",
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -206,9 +199,12 @@ export class UserController {
   ) {
     const userId = parseInt(id, 10);
     if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
-  
-    const updatedUser = await this.userService.updateUser(userId, updateUserData);
-  
+
+    const updatedUser = await this.userService.updateUser(
+      userId,
+      updateUserData
+    );
+
     return { message: 'Profil mis à jour avec succès', user: updatedUser };
   }
 
@@ -231,9 +227,9 @@ export class UserController {
 
   // SUPPRIME LE PROFIL DE L'UTILISATEUR
   @Delete(':id')
-  @UseGuards(JwtAuthGuard) // Assure que l'utilisateur est authentifié
+  @UseGuards(JwtAuthGuard)
   async deleteUser(@Param('id') id: string) {
-    const userId = parseInt(id, 10); // Convertit l'ID de chaîne en nombre
+    const userId = parseInt(id, 10);
     if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
     return this.userService.deleteUser(userId);
   }

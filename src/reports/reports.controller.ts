@@ -17,7 +17,7 @@ export class ReportController {
   @Post()
   @UseInterceptors(
     FilesInterceptor('photos', 7, {
-      limits: { fileSize: 10 * 1024 * 1024 }, // Limite à 10 Mo
+      limits: { fileSize: 10 * 1024 * 1024 }, 
     }),
   )
   
@@ -54,7 +54,6 @@ export class ReportController {
       console.log('Aucune photo fournie pour ce signalement.');
     }
   
-    // Appel au service pour créer le signalement
     return this.reportService.createReport(reportData, photoUrls);
   }
 
@@ -66,14 +65,12 @@ export class ReportController {
     @Query('longitude') longitude?: string, 
     @Query('radiusKm') radiusKm: string = '10', 
   ) {
-    // Validation des paramètres géographiques
     if ((latitude && isNaN(Number(latitude))) || (longitude && isNaN(Number(longitude)))) {
       throw new BadRequestException('Latitude et longitude doivent être des nombres valides.');
     }
     if (radiusKm && isNaN(Number(radiusKm))) {
       throw new BadRequestException('radiusKm doit être un nombre valide.');
     }
-    // Appel du service avec les paramètres validés
     return this.reportService.listReports({ latitude, longitude, radiusKm, ...otherFilters });
   }
 
@@ -126,7 +123,7 @@ export class ReportController {
   @Delete('comment/:id')
   @UseGuards(JwtAuthGuard)
   async deleteComment(@Param('id') commentId: number, @Req() req: any) {
-    const userId = req.user.id; // ID de l'utilisateur connecté
+    const userId = req.user.id; 
     return this.reportService.deleteComment(commentId, userId);
   }
 
@@ -137,7 +134,6 @@ export class ReportController {
   
     const { reportId, userId, type, latitude, longitude } = voteData;
   
-    // Validation des données
     if (!['up', 'down'].includes(type)) {
       throw new BadRequestException('Le type de vote est invalide.');
     }
@@ -153,13 +149,11 @@ export class ReportController {
   async commentOnReport(@Body() commentData: any) {
     console.log('Données reçues dans le contrôleur :', commentData);
   
-    // Vérifiez explicitement la clé text
     if (!commentData.text || typeof commentData.text !== 'string' || commentData.text.trim() === '') {
       console.error('Le contenu du commentaire est requis mais manquant ou invalide.');
       throw new BadRequestException('Le contenu du commentaire est requis.');
     }
   
-    // Appeler le service
     return this.reportService.commentOnReport(commentData);
   }
   

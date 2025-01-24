@@ -3,22 +3,22 @@ import { IsString, IsNotEmpty, IsOptional, IsNumber, IsArray } from 'class-valid
 export class CreatePostDto {
   @IsString()
   @IsNotEmpty()
-  content: string; // Contenu de la publication
+  content: string; 
 
   @IsNumber()
   @IsNotEmpty()
-  authorId: number; // ID de l'auteur de la publication
+  authorId: number; 
 
   @IsNumber()
   @IsOptional()
-  latitude?: number; // Latitude (facultatif)
+  latitude?: number; 
 
   @IsNumber()
   @IsOptional()
-  longitude?: number; // Longitude (facultatif)
+  longitude?: number; 
 
   @IsArray()
   @IsOptional()
-  @IsString({ each: true }) // Chaque élément du tableau doit être une chaîne
-  photoUrls?: string[]; // URLs des photos associées (facultatif)
+  @IsString({ each: true }) 
+  photoUrls?: string[]; 
 }
