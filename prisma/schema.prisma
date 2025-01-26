@@ -45,6 +45,7 @@ model User {
   votes                     Vote[]
   groups                    Group[]                    @relation("GroupMembers")
   conversations             Conversation[]             @relation("UserConversations")
+  commentLikes              CommentLike[]
 }
 
 model Notification {
@@ -133,18 +134,37 @@ model Like {
 }
 
 model Comment {
-  id        Int       @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   text      String
-  createdAt DateTime  @default(now())
+  createdAt DateTime      @default(now())
   reportId  Int?
   userId    Int
   postId    Int?
   parentId  Int?
-  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies   Comment[] @relation("CommentReplies")
-  post      Post?     @relation(fields: [postId], references: [id])
-  report    Report?   @relation(fields: [reportId], references: [id])
-  user      User      @relation(fields: [userId], references: [id])
+  parent    Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[]     @relation("CommentReplies")
+  post      Post?         @relation(fields: [postId], references: [id])
+  report    Report?       @relation(fields: [reportId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
+
+  // Relation avec les likes
+  likes     CommentLike[]
+  likesCount Int           @default(0) // Compteur des likes pour améliorer les performances
+}
+
+model CommentLike {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  commentId  Int
+  createdAt  DateTime  @default(now())
+
+  // Relation avec Comment
+  comment    Comment   @relation(fields: [commentId], references: [id])
+
+  // Relation avec User
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, commentId]) // Un utilisateur peut liker un commentaire une seule fois
 }
 
 model Post {

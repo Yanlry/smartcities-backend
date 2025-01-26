@@ -246,13 +246,13 @@ export class ReportService {
   // SERVICE : Récupère les statistiques des signalements par catégorie
   async getStatisticsByCategoryForCity(nomCommune: string) {
     const statistics = await this.prisma.report.groupBy({
-      by: ['type'], 
+      by: ['type'],
       _count: {
-        type: true, 
+        type: true,
       },
       where: {
         city: {
-          contains: nomCommune, 
+          contains: nomCommune,
           mode: 'insensitive',
         },
       },
@@ -300,7 +300,7 @@ export class ReportService {
     lat2: number,
     lon2: number
   ): number {
-    const R = 6371e3; 
+    const R = 6371e3;
     const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
 
     const φ1 = toRadians(lat1);
@@ -313,7 +313,7 @@ export class ReportService {
       Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    return R * c; 
+    return R * c;
   }
 
   // MISE À JOUR DU TRUST RATE DE L'UTILISATEUR
@@ -359,7 +359,7 @@ export class ReportService {
         trustRate -= 1;
       }
     });
-    return validVotes > 0 ? trustRate / validVotes : 0; 
+    return validVotes > 0 ? trustRate / validVotes : 0;
   }
 
   async getReporById(
@@ -386,8 +386,8 @@ export class ReportService {
           select: {
             id: true,
             username: true,
-            useFullName: true, 
-            firstName: true, 
+            useFullName: true,
+            firstName: true,
             lastName: true,
           },
         },
@@ -441,7 +441,7 @@ export class ReportService {
                   lastName: true,
                 },
               },
-              replies: true, 
+              replies: true,
             },
           },
         },
@@ -614,8 +614,8 @@ export class ReportService {
           report.userId,
           `${commenterName} a commenté votre signalement.`,
           'COMMENT',
-          reportId, 
-          userId 
+          reportId,
+          userId
         );
       }
     } catch (error) {
@@ -672,7 +672,7 @@ export class ReportService {
         console.log('Photos reçues pour ajout :', photos);
 
         const validPhotos = photos
-          .filter((photo) => photo.uri || photo.url) 
+          .filter((photo) => photo.uri || photo.url)
           .map((photo) => ({
             url: photo.url || photo.uri,
             reportId: id,
@@ -804,7 +804,7 @@ export class ReportService {
           `${voterName} a voté ${voteType} sur votre signalement.`,
           'VOTE',
           reportId,
-          userId 
+          userId
         );
       }
     } catch (error) {
@@ -833,7 +833,7 @@ export class ReportService {
 
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
-      include: { parent: true }, 
+      include: { parent: true },
     });
 
     if (!comment) {
@@ -856,9 +856,84 @@ export class ReportService {
   }
 
   // MÉTHODE POUR RÉCUPÉRER LES COMMENTAIRES D'UN SIGNAL
-  async getCommentsByReportId(reportId: number) {
-    return this.prisma.comment.findMany({
-      where: { reportId },
+  async getCommentsByReportId(reportId: number, userId: number) {
+    const comments = await this.prisma.comment.findMany({
+      where: { reportId, parentId: null }, // Récupère uniquement les commentaires principaux
+      include: {
+        replies: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                useFullName: true,
+                photos: {
+                  where: { isProfile: true },
+                  select: { url: true },
+                },
+              },
+            },
+            likes: true, // Inclut les likes pour chaque réponse
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            useFullName: true,
+            photos: {
+              where: { isProfile: true },
+              select: { url: true },
+            },
+          },
+        },
+        likes: true, // Inclut les likes pour chaque commentaire principal
+      },
     });
+  
+    return comments.map((comment) => ({
+      ...comment,
+      user: {
+        ...comment.user,
+        profilePhoto: comment.user.photos?.[0]?.url || null, // Transforme `photos` en `profilePhoto`
+      },
+      likesCount: comment.likes.length, // Compteur total des likes pour le commentaire principal
+      likedByUser: comment.likes.some((like) => like.userId === userId), // Vérifie si l'utilisateur connecté a liké le commentaire principal
+      replies: comment.replies.map((reply) => ({
+        ...reply,
+        user: {
+          ...reply.user,
+          profilePhoto: reply.user.photos?.[0]?.url || null, // Transforme `photos` en `profilePhoto` pour les réponses
+        },
+        likesCount: reply.likes.length, // Compteur total des likes pour la réponse
+        likedByUser: reply.likes.some((like) => like.userId === userId), // Vérifie si l'utilisateur connecté a liké la réponse
+      })),
+    }));
+  }
+  async toggleLikeComment(commentId: number, userId: number) {
+    const existingLike = await this.prisma.commentLike.findFirst({
+      where: { commentId, userId },
+    });
+  
+    if (existingLike) {
+      await this.prisma.commentLike.delete({
+        where: { id: existingLike.id },
+      });
+  
+      return { message: 'Vous venez de déliker le commentaire.' };
+    } else {
+      await this.prisma.commentLike.create({
+        data: {
+          commentId,
+          userId,
+        },
+      });
+  
+      return { message: 'Bravo vous avez liké le commentaire.' };
+    }
   }
 }
