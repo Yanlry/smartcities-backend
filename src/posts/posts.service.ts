@@ -8,6 +8,7 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { NotificationService } from '../notification/notification.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class PostsService {
@@ -18,8 +19,6 @@ export class PostsService {
 
   // CRÉER UNE NOUVELLE PUBLICATION
   async createPost(createPostDto: CreatePostDto, photoUrls: string[]) {
-    console.log('Photo URLs received in createPost service:', photoUrls);
-
     const post = await this.prisma.post.create({
       data: {
         content: createPostDto.content,
@@ -30,16 +29,11 @@ export class PostsService {
         },
       },
     });
-
-    console.log('Post created in database:', post);
-
     if (photoUrls && photoUrls.length > 0) {
       const photosData = photoUrls.map((url) => ({
         url,
         postId: post.id,
       }));
-
-      console.log('Associating photos with post:', photosData);
 
       try {
         await this.prisma.photo.createMany({
@@ -56,72 +50,48 @@ export class PostsService {
       }
     }
 
+    const user = await this.prisma.user.findUnique({
+      where: { id: createPostDto.authorId },
+      select: {
+        nomCommune: true,
+        firstName: true,
+        lastName: true,
+        username: true,
+        useFullName: true,
+      },
+    });
+
     const updatedPost = await this.prisma.post.findUnique({
       where: { id: post.id },
       include: { photos: true },
     });
 
-    console.log('Post with associated photos:', updatedPost);
-
-    try {
-      const followers = await this.prisma.userFollow.findMany({
-        where: { followingId: createPostDto.authorId },
-        include: {
-          follower: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              useFullName: true,
-            },
-          },
-        },
-      });
-
-      console.log(`Found ${followers.length} followers to notify.`);
-
-      const author = await this.prisma.user.findUnique({
-        where: { id: createPostDto.authorId },
-        select: {
-          username: true,
-          firstName: true,
-          lastName: true,
-          useFullName: true,
-        },
-      });
-
-      const authorName = author.useFullName
-        ? `${author.firstName} ${author.lastName}`
-        : author.username || 'Un utilisateur';
-
-      for (const { follower } of followers) {
-        await this.notificationService.createNotification(
-          follower.id,
-          `${authorName} a publié un nouveau post : "${createPostDto.content.substring(0, 50)}..."`,
-          'NEW_POST',
-          post.id,
-          createPostDto.authorId
-        );
-      }
-    } catch (error) {
-      console.error(
-        'Erreur lors de la création des notifications pour les followers :',
-        error.message
-      );
-    }
-
-    return updatedPost;
+    return {
+      ...updatedPost,
+      authorName: user.useFullName
+        ? `${user.firstName} ${user.lastName}`
+        : user.username || 'Utilisateur inconnu',
+      nomCommune: user.nomCommune,
+    };
   }
 
-  async listPosts(filters: any, userId: number) {
+  async listPosts(filters: any, userId: number, cityName?: string) {
+    const whereClause: Prisma.PostWhereInput = cityName
+      ? {
+          author: {
+            nomCommune: {
+              equals: cityName,
+              mode: 'insensitive',
+            },
+          },
+        }
+      : {};
+
     const posts = await this.prisma.post.findMany({
-      where: filters,
+      where: whereClause,
       include: {
-        likes: true, 
-        photos: {
-          select: { url: true }, 
-        },
+        likes: true,
+        photos: { select: { url: true } },
         comments: {
           include: {
             user: {
@@ -146,6 +116,7 @@ export class PostsService {
             firstName: true,
             lastName: true,
             useFullName: true,
+            nomCommune: true,
             photos: {
               where: { isProfile: true },
               select: { url: true },
@@ -155,61 +126,36 @@ export class PostsService {
       },
     });
 
-    const organizeComments = (comments) => {
-      const commentMap = new Map();
-
-      comments.forEach((comment) => {
-        commentMap.set(comment.id, { ...comment, replies: [] });
-      });
-
-      const rootComments = [];
-
-      comments.forEach((comment) => {
-        if (comment.parentId) {
-          const parentComment = commentMap.get(comment.parentId);
-          if (parentComment) {
-            parentComment.replies.push(commentMap.get(comment.id));
-          }
-        } else {
-          rootComments.push(commentMap.get(comment.id));
-        }
-      });
-
-      return rootComments;
-    };
-
     return posts.map((post) => ({
       id: post.id,
       content: post.content,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
-      likesCount: post.likes.length, 
-      likedByUser: post.likes.some((like) => like.userId === userId), 
+      likesCount: post.likes.length,
+      likedByUser: post.likes.some((like) => like.userId === userId),
       authorId: post.author.id,
       authorName: post.author.useFullName
         ? `${post.author.firstName} ${post.author.lastName}`
         : post.author.username || 'Utilisateur inconnu',
       profilePhoto: post.author.photos[0]?.url || null,
+      nomCommune: post.author.nomCommune || 'Ville inconnue',
       photos: post.photos.map((photo) => photo.url),
-      comments: organizeComments(
-        post.comments.map((comment) => ({
-          id: comment.id,
-          text: comment.text,
-          createdAt: comment.createdAt, 
-          parentId: comment.parentId || null, 
-          userId: comment.user?.id || null,
-          userName: comment.user
-            ? comment.user.useFullName
-              ? `${comment.user.firstName} ${comment.user.lastName}`
-              : comment.user.username || 'Utilisateur inconnu'
-            : 'Utilisateur inconnu',
-          userProfilePhoto: comment.user?.photos[0]?.url || null,
-        }))
-      ),
+      comments: post.comments.map((comment) => ({
+        id: comment.id,
+        text: comment.text,
+        createdAt: comment.createdAt,
+        parentId: comment.parentId || null,
+        userId: comment.user?.id || null,
+        userName: comment.user
+          ? comment.user.useFullName
+            ? `${comment.user.firstName} ${comment.user.lastName}`
+            : comment.user.username || 'Utilisateur inconnu'
+          : 'Utilisateur inconnu',
+        userProfilePhoto: comment.user?.photos[0]?.url || null,
+      })),
     }));
   }
 
-  // RÉCUPÈRE UNE PUBLICATION PAR SON ID AVEC LE NOMBRE DE LIKES
   // RÉCUPÈRE UNE PUBLICATION PAR SON ID AVEC LE NOMBRE DE LIKES ET LES PHOTOS ASSOCIÉES
   async getPostById(id: number, userId: number) {
     const post = await this.prisma.post.findUnique({
@@ -288,7 +234,7 @@ export class PostsService {
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
       likesCount: post._count.likes,
-      likedByUser, 
+      likedByUser,
       authorId: post.author.id,
       authorName: post.author.useFullName
         ? `${post.author.firstName} ${post.author.lastName}`
@@ -330,7 +276,7 @@ export class PostsService {
       await this.prisma.like.delete({
         where: { id: existingLike.id },
       });
-      await this.updateUserTrustRate(userId, -1); 
+      await this.updateUserTrustRate(userId, -1);
       return { message: 'Vous venez de déliker' };
     } else {
       const like = await this.prisma.like.create({
@@ -340,11 +286,11 @@ export class PostsService {
         },
       });
 
-      await this.updateUserTrustRate(userId, 1); 
+      await this.updateUserTrustRate(userId, 1);
 
       const post = await this.prisma.post.findUnique({
         where: { id: postId },
-        select: { id: true, authorId: true }, 
+        select: { id: true, authorId: true },
       });
 
       const user = await this.prisma.user.findUnique({
@@ -365,11 +311,11 @@ export class PostsService {
         const notificationMessage = `${likerName} a aimé votre publication.`;
 
         await this.notificationService.createNotification(
-          post.authorId, 
-          notificationMessage, 
-          'LIKE', 
-          post.id, 
-          userId 
+          post.authorId,
+          notificationMessage,
+          'LIKE',
+          post.id,
+          userId
         );
       }
 
@@ -422,7 +368,7 @@ export class PostsService {
         postId,
         userId,
         text,
-        parentId, 
+        parentId,
       },
     });
 
@@ -457,11 +403,11 @@ export class PostsService {
         const notificationMessage = `${commenterName} a répondu à votre commentaire.`;
 
         await this.notificationService.createNotification(
-          parentComment.userId, 
-          notificationMessage, 
-          'comment_reply', 
-          postId, 
-          userId 
+          parentComment.userId,
+          notificationMessage,
+          'comment_reply',
+          postId,
+          userId
         );
       }
     } else {

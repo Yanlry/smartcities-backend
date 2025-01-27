@@ -129,23 +129,23 @@ model Like {
   postId    Int
   userId    Int
   createdAt DateTime @default(now())
-  post      Post     @relation(fields: [postId], references: [id])
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id])
 }
 
 model Comment {
-  id        Int           @id @default(autoincrement())
-  text      String
-  createdAt DateTime      @default(now())
-  reportId  Int?
-  userId    Int
-  postId    Int?
-  parentId  Int?
-  parent    Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies   Comment[]     @relation("CommentReplies")
-  post      Post?         @relation(fields: [postId], references: [id])
-  report    Report?       @relation(fields: [reportId], references: [id])
-  user      User          @relation(fields: [userId], references: [id])
+  id         Int           @id @default(autoincrement())
+  text       String
+  createdAt  DateTime      @default(now())
+  reportId   Int?
+  userId     Int
+  postId     Int?
+  parentId   Int?
+  parent     Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[]     @relation("CommentReplies")
+  post       Post?         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  report     Report?       @relation(fields: [reportId], references: [id])
+  user       User          @relation(fields: [userId], references: [id])
   likes      CommentLike[]
   likesCount Int           @default(0) 
 }

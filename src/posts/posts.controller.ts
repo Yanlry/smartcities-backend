@@ -38,7 +38,7 @@ export class PostsController {
   @Post()
   @UseInterceptors(
     FilesInterceptor('photos', 5, {
-      limits: { fileSize: 10 * 1024 * 1024 }, 
+      limits: { fileSize: 10 * 1024 * 1024 },
     })
   )
   async createPost(
@@ -48,13 +48,13 @@ export class PostsController {
     this.logger.log('Creating post...');
     this.logger.debug('Received Body:', createPostDto);
     this.logger.debug('Received Files:', photos);
-
+  
     const validPhotos = photos.filter(
       (file) => file.buffer && file.originalname && file.mimetype
     );
-
+  
     this.logger.debug('Valid Files:', validPhotos);
-
+  
     const photoUrls = [];
     for (const photo of validPhotos) {
       try {
@@ -75,9 +75,9 @@ export class PostsController {
         );
       }
     }
-
+  
     this.logger.debug('All uploaded photo URLs:', photoUrls);
-
+  
     try {
       const post = await this.postsService.createPost(createPostDto, photoUrls);
       this.logger.log('Post created successfully:', post);
@@ -90,18 +90,19 @@ export class PostsController {
     }
   }
 
-  // LISTE LES PUBLICATIONS
   @Get()
-@UseGuards(JwtAuthGuard) 
-async listPosts(@Query() filters: any, @Req() req: any) {
-  const user = req.user; 
-
-  if (!user || !user.id) {
-    throw new UnauthorizedException('Utilisateur non authentifié');
+  @UseGuards(JwtAuthGuard)
+  async listPosts(@Query() filters: any, @Req() req: any) {
+    const user = req.user;
+  
+    if (!user || !user.id) {
+      throw new UnauthorizedException('Utilisateur non authentifié');
+    }
+  
+    const cityName = filters.cityName ? filters.cityName.toUpperCase() : undefined;
+  
+    return this.postsService.listPosts(filters, user.id, cityName);
   }
-
-  return this.postsService.listPosts(filters, user.id);
-}
 
 // RÉCUPÈRE LES DÉTAILS D'UNE PUBLICATION SPÉCIFIQUE
 @Get(':id')
