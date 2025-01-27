@@ -824,41 +824,44 @@ export class ReportService {
   }
 
   async deleteComment(commentId: number, userId: number) {
-    console.log(
-      'Suppression du commentaire:',
-      commentId,
-      "par l'utilisateur:",
-      userId
-    );
-
+    console.log("Suppression du commentaire ID :", commentId, "par l'utilisateur :", userId);
+  
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
       include: { parent: true },
     });
-
+  
     if (!comment) {
-      console.log('Commentaire non trouvé.');
-      throw new NotFoundException('Commentaire introuvable.');
+      console.log("Commentaire introuvable pour ID :", commentId);
+      throw new NotFoundException("Commentaire introuvable.");
     }
-
+  
     if (comment.userId !== userId) {
-      console.log(
-        "Tentative de suppression non autorisée par l'utilisateur:",
-        userId
-      );
+      console.log("L'utilisateur :", userId, "n'est pas autorisé à supprimer ce commentaire.");
       throw new ForbiddenException(
         "Vous n'êtes pas autorisé à supprimer ce commentaire ou cette réponse."
       );
     }
-
-    console.log('Suppression du commentaire ou réponse réussie.');
-    return this.prisma.comment.delete({ where: { id: commentId } });
+   
+    await this.prisma.commentLike.deleteMany({
+      where: { commentId },
+    });
+  
+    console.log("Likes associés supprimés pour le commentaire ID :", commentId);
+   
+    const deletedComment = await this.prisma.comment.delete({
+      where: { id: commentId },
+    });
+  
+    console.log("Suppression du commentaire réussie pour ID :", commentId);
+  
+    return deletedComment;
   }
 
   // MÉTHODE POUR RÉCUPÉRER LES COMMENTAIRES D'UN SIGNAL
   async getCommentsByReportId(reportId: number, userId: number) {
     const comments = await this.prisma.comment.findMany({
-      where: { reportId, parentId: null }, // Récupère uniquement les commentaires principaux
+      where: { reportId, parentId: null },  
       include: {
         replies: {
           include: {
@@ -875,7 +878,7 @@ export class ReportService {
                 },
               },
             },
-            likes: true, // Inclut les likes pour chaque réponse
+            likes: true, 
           },
         },
         user: {
@@ -891,7 +894,7 @@ export class ReportService {
             },
           },
         },
-        likes: true, // Inclut les likes pour chaque commentaire principal
+        likes: true,  
       },
     });
   
@@ -899,18 +902,18 @@ export class ReportService {
       ...comment,
       user: {
         ...comment.user,
-        profilePhoto: comment.user.photos?.[0]?.url || null, // Transforme `photos` en `profilePhoto`
+        profilePhoto: comment.user.photos?.[0]?.url || null, 
       },
-      likesCount: comment.likes.length, // Compteur total des likes pour le commentaire principal
-      likedByUser: comment.likes.some((like) => like.userId === userId), // Vérifie si l'utilisateur connecté a liké le commentaire principal
+      likesCount: comment.likes.length, 
+      likedByUser: comment.likes.some((like) => like.userId === userId),  
       replies: comment.replies.map((reply) => ({
         ...reply,
         user: {
           ...reply.user,
-          profilePhoto: reply.user.photos?.[0]?.url || null, // Transforme `photos` en `profilePhoto` pour les réponses
+          profilePhoto: reply.user.photos?.[0]?.url || null,  
         },
-        likesCount: reply.likes.length, // Compteur total des likes pour la réponse
-        likedByUser: reply.likes.some((like) => like.userId === userId), // Vérifie si l'utilisateur connecté a liké la réponse
+        likesCount: reply.likes.length,  
+        likedByUser: reply.likes.some((like) => like.userId === userId),  
       })),
     }));
   }

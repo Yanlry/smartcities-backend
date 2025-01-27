@@ -154,7 +154,15 @@ export class ReportController {
   @Delete('comment/:id')
   @UseGuards(JwtAuthGuard)
   async deleteComment(@Param('id') commentId: number, @Req() req: any) {
-    const userId = req.user.id;
+    const userId = req.user?.id;
+  
+    if (!userId) {
+      console.log("Utilisateur non authentifié ou JWT invalide.");
+      throw new UnauthorizedException("Utilisateur non authentifié.");
+    }
+  
+    console.log("Utilisateur authentifié :", userId);
+  
     return this.reportService.deleteComment(commentId, userId);
   }
 
@@ -196,11 +204,11 @@ export class ReportController {
     return this.reportService.commentOnReport(commentData);
   }
 
-  @UseGuards(JwtAuthGuard) // Protège cette route avec le guard JWT
+  @UseGuards(JwtAuthGuard) 
   @Get(':id/comments')
   async getCommentsByReportId(@Param('id') id: string, @Request() req: any) {
     const reportId = parseInt(id, 10);
-    const userId = req.user?.id; // Récupère l'utilisateur connecté depuis le JWT
+    const userId = req.user?.id;  
 
     console.log('Utilisateur connecté (userId) :', userId);
 
