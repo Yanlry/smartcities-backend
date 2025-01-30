@@ -129,8 +129,11 @@ model Like {
   postId    Int
   userId    Int
   createdAt DateTime @default(now())
+
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, postId])  
 }
 
 model Comment {
@@ -141,11 +144,14 @@ model Comment {
   userId     Int
   postId     Int?
   parentId   Int?
+  
   parent     Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies    Comment[]     @relation("CommentReplies")
+
   post       Post?         @relation(fields: [postId], references: [id], onDelete: Cascade)
   report     Report?       @relation(fields: [reportId], references: [id])
   user       User          @relation(fields: [userId], references: [id])
+
   likes      CommentLike[]
   likesCount Int           @default(0) 
 }
@@ -155,8 +161,10 @@ model CommentLike {
   userId     Int
   commentId  Int
   createdAt  DateTime  @default(now())
+
   comment    Comment   @relation(fields: [commentId], references: [id], onDelete: Cascade)
   user       User      @relation(fields: [userId], references: [id])
+
   @@unique([userId, commentId])  
 }
 

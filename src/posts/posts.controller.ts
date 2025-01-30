@@ -16,8 +16,7 @@ import {
   BadRequestException,
   UnauthorizedException,
   UseGuards,
-  Req
-
+  Req,
 } from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -48,13 +47,13 @@ export class PostsController {
     this.logger.log('Creating post...');
     this.logger.debug('Received Body:', createPostDto);
     this.logger.debug('Received Files:', photos);
-  
+
     const validPhotos = photos.filter(
       (file) => file.buffer && file.originalname && file.mimetype
     );
-  
+
     this.logger.debug('Valid Files:', validPhotos);
-  
+
     const photoUrls = [];
     for (const photo of validPhotos) {
       try {
@@ -75,9 +74,9 @@ export class PostsController {
         );
       }
     }
-  
+
     this.logger.debug('All uploaded photo URLs:', photoUrls);
-  
+
     try {
       const post = await this.postsService.createPost(createPostDto, photoUrls);
       this.logger.log('Post created successfully:', post);
@@ -94,27 +93,29 @@ export class PostsController {
   @UseGuards(JwtAuthGuard)
   async listPosts(@Query() filters: any, @Req() req: any) {
     const user = req.user;
-  
+
     if (!user || !user.id) {
       throw new UnauthorizedException('Utilisateur non authentifié');
     }
-  
-    const cityName = filters.cityName ? filters.cityName.toUpperCase() : undefined;
-  
+
+    const cityName = filters.cityName
+      ? filters.cityName.toUpperCase()
+      : undefined;
+
     return this.postsService.listPosts(filters, user.id, cityName);
   }
 
-// RÉCUPÈRE LES DÉTAILS D'UNE PUBLICATION SPÉCIFIQUE
-@Get(':id')
-@UseGuards(JwtAuthGuard) 
-async getPostById(@Param('id') id: string, @Req() req: any) {
-  const user = req.user; 
-  if (!user || !user.id) {
-    throw new UnauthorizedException('Utilisateur non authentifié');
-  }
+  // RÉCUPÈRE LES DÉTAILS D'UNE PUBLICATION SPÉCIFIQUE
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  async getPostById(@Param('id') id: string, @Req() req: any) {
+    const user = req.user;
+    if (!user || !user.id) {
+      throw new UnauthorizedException('Utilisateur non authentifié');
+    }
 
-  return this.postsService.getPostById(Number(id), user.id);
-}
+    return this.postsService.getPostById(Number(id), user.id);
+  }
 
   // MODIFIER UNE PUBLICATION
   @Put(':id')
@@ -132,6 +133,14 @@ async getPostById(@Param('id') id: string, @Req() req: any) {
     @Body('userId') userId: number
   ) {
     return this.postsService.toggleLike(postId, userId);
+  }
+
+  @Post('comments/:commentId/like') // 🔥 Ajoute "comments" dans l'URL
+  async toggleLikeComment(
+    @Param('commentId') commentId: number,
+    @Body() body: { userId: number }
+  ) {
+    return this.postsService.toggleLikeComment(commentId, body.userId);
   }
 
   @Delete(':id')
@@ -161,7 +170,7 @@ async getPostById(@Param('id') id: string, @Req() req: any) {
     }
   }
 
-  // AJOUTE UN COMMENTAIRE ET MET À JOUR LE TRUSTRATE DE L'UTILISATEUR
+  // AJOUTE UN COMMENTAIRE
   @Post('comment')
   async commentOnPost(
     @Body() commentData: { postId: number; userId: number; text: string }

@@ -107,6 +107,7 @@ export class PostsService {
                 },
               },
             },
+            likes: true,
           },
         },
         author: {
@@ -152,6 +153,8 @@ export class PostsService {
             : comment.user.username || 'Utilisateur inconnu'
           : 'Utilisateur inconnu',
         userProfilePhoto: comment.user?.photos[0]?.url || null,
+        likesCount: comment.likesCount || 0, // ✅ Ajoute le compteur
+        likedByUser: comment.likes.some((like) => like.userId === userId), // ✅ Vérifie si l'utilisateur a liké
       })),
     }));
   }
@@ -321,6 +324,70 @@ export class PostsService {
 
       return { message: 'Bravo vous avez liké' };
     }
+  }
+
+  async toggleLikeComment(commentId: number, userId: number) {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      select: { userId: true, postId: true, likesCount: true },
+    });
+  
+    if (!comment) {
+      throw new BadRequestException("Le commentaire n'existe pas.");
+    }
+  
+    const existingLike = await this.prisma.commentLike.findFirst({
+      where: { commentId, userId },
+    });
+  
+    let liked = false;
+    let updatedLikesCount = comment.likesCount;
+  
+    if (existingLike) {
+      await this.prisma.commentLike.delete({ where: { id: existingLike.id } });
+  
+      updatedLikesCount = Math.max(0, updatedLikesCount - 1); // 🔥 Évite les négatifs
+      await this.updateUserTrustRate(userId, -0.5);
+    } else {
+      await this.prisma.commentLike.create({ data: { commentId, userId } });
+  
+      updatedLikesCount += 1;
+      liked = true;
+      await this.updateUserTrustRate(userId, 0.5);
+  
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true, username: true, useFullName: true },
+      });
+  
+      if (comment.userId && user) {
+        const likerName = user.useFullName
+          ? `${user.firstName} ${user.lastName}`
+          : user.username || "Un utilisateur";
+  
+        const notificationMessage = `${likerName} a aimé votre commentaire.`;
+  
+        await this.notificationService.createNotification(
+          comment.userId,
+          notificationMessage,
+          "COMMENT_LIKE",
+          comment.postId,
+          userId
+        );
+      }
+    }
+  
+    // ✅ Mets à jour `likesCount` dans la base de données
+    await this.prisma.comment.update({
+      where: { id: commentId },
+      data: { likesCount: updatedLikesCount },
+    });
+  
+    return {
+      message: liked ? "Bravo, vous avez liké ce commentaire" : "Vous venez de déliker ce commentaire",
+      liked,
+      likesCount: updatedLikesCount, // ✅ Retourne le nouveau `likesCount`
+    };
   }
 
   // MET À JOUR LE TRUSTRATE D'UN UTILISATEUR
