@@ -37,6 +37,7 @@ export class GroupsService {
   async getGroupById(id: number) {
     const group = await this.prisma.group.findUnique({
       where: { id },
+      include: { members: true },
     });
     if (!group) throw new NotFoundException('Groupe non trouvé');
     return group;
@@ -45,8 +46,15 @@ export class GroupsService {
   async joinGroup(groupId: number, userId: number) {
     const group = await this.prisma.group.findUnique({
       where: { id: groupId },
+      include: { members: true },
     });
+
     if (!group) throw new NotFoundException('Groupe non trouvé');
+
+    const isMember = group.members.some((member) => member.id === userId);
+    if (isMember) {
+      throw new ForbiddenException("L'utilisateur est déjà membre du groupe");
+    }
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -105,42 +113,63 @@ export class GroupsService {
 
   async getGroupMembers(groupId: number) {
     const group = await this.prisma.group.findUnique({
-      where: { id: groupId },
-      include: {
-        members: true,
-      },
+        where: { id: groupId },
+        include: {
+            members: {
+                include: {
+                    user: {  
+                        select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            username: true,
+                            email: true
+                        }
+                    }
+                }
+            }
+        }
     });
 
     if (!group) throw new NotFoundException('Groupe non trouvé');
-    return group.members;
+     
+    return group.members.map(member => member.user);
+}
+
+async deleteGroup(groupId: number, ownerId: number) {
+  const group = await this.prisma.group.findUnique({
+    where: { id: groupId },
+    include: { members: true },  
+  });
+
+  if (!group) {
+    throw new NotFoundException('Groupe non trouvé');
   }
 
-  async deleteGroup(groupId: number, ownerId: number) {
-    const group = await this.prisma.group.findUnique({
-      where: { id: groupId },
-      include: { members: true },
-    });
+  if (group.ownerId !== ownerId) {
+    throw new ForbiddenException(
+      "Vous n'êtes pas autorisé à supprimer ce groupe"
+    );
+  }
 
-    if (!group) {
-      throw new NotFoundException('Groupe non trouvé');
-    }
-
-    if (group.ownerId !== ownerId) {
-      throw new ForbiddenException(
-        "Vous n'êtes pas autorisé à supprimer ce groupe"
-      );
-    }
-
-    const message = `Le groupe (ID : ${groupId}) auquel vous apparteniez a été supprimé.`;
-    for (const member of group.members) {
-      await this.notificationService.createNotification(
+ 
+  await this.prisma.$transaction([
+    this.prisma.groupMember.deleteMany({ where: { groupId } }),  
+    this.prisma.group.delete({ where: { id: groupId } }),  
+  ]);
+ 
+  const message = `Le groupe (ID : ${groupId}) auquel vous apparteniez a été supprimé.`;
+  await Promise.all(
+    group.members.map((member) =>
+      this.notificationService.createNotification(
         member.id,
         message,
         'group',
         groupId
-      );
-    }
+      )
+    )
+  );
 
-    return this.prisma.group.delete({ where: { id: groupId } });
-  }
+  return { message: 'Groupe supprimé avec succès' };
+}
 }

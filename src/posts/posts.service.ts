@@ -153,8 +153,8 @@ export class PostsService {
             : comment.user.username || 'Utilisateur inconnu'
           : 'Utilisateur inconnu',
         userProfilePhoto: comment.user?.photos[0]?.url || null,
-        likesCount: comment.likesCount || 0, // ✅ Ajoute le compteur
-        likedByUser: comment.likes.some((like) => like.userId === userId), // ✅ Vérifie si l'utilisateur a liké
+        likesCount: comment.likesCount || 0,  
+        likedByUser: comment.likes.some((like) => like.userId === userId),  
       })),
     }));
   }
@@ -346,7 +346,7 @@ export class PostsService {
     if (existingLike) {
       await this.prisma.commentLike.delete({ where: { id: existingLike.id } });
   
-      updatedLikesCount = Math.max(0, updatedLikesCount - 1); // 🔥 Évite les négatifs
+      updatedLikesCount = Math.max(0, updatedLikesCount - 1);  
       await this.updateUserTrustRate(userId, -0.5);
     } else {
       await this.prisma.commentLike.create({ data: { commentId, userId } });
@@ -376,8 +376,7 @@ export class PostsService {
         );
       }
     }
-  
-    // ✅ Mets à jour `likesCount` dans la base de données
+   
     await this.prisma.comment.update({
       where: { id: commentId },
       data: { likesCount: updatedLikesCount },
@@ -386,7 +385,7 @@ export class PostsService {
     return {
       message: liked ? "Bravo, vous avez liké ce commentaire" : "Vous venez de déliker ce commentaire",
       liked,
-      likesCount: updatedLikesCount, // ✅ Retourne le nouveau `likesCount`
+      likesCount: updatedLikesCount,  
     };
   }
 

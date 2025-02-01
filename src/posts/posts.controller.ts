@@ -135,7 +135,7 @@ export class PostsController {
     return this.postsService.toggleLike(postId, userId);
   }
 
-  @Post('comments/:commentId/like') // 🔥 Ajoute "comments" dans l'URL
+  @Post('comments/:commentId/like')  
   async toggleLikeComment(
     @Param('commentId') commentId: number,
     @Body() body: { userId: number }

@@ -8,43 +8,43 @@ datasource db {
 }
 
 model User {
-  id                        Int                        @id @default(autoincrement())
-  email                     String                     @unique
+  id                        Int      @id @default(autoincrement())
+  email                     String   @unique
   password                  String
-  createdAt                 DateTime                   @default(now())
+  createdAt                 DateTime @default(now())
   refreshToken              String?
   resetToken                String?
   resetTokenExpiry          DateTime?
   trustRate                 Float?
-  isSubscribed              Boolean                    @default(false)
-  isMunicipality            Boolean                    @default(false)
+  isSubscribed              Boolean  @default(false)
+  isMunicipality            Boolean  @default(false)
   latitude                  Float?
   longitude                 Float?
-  firstName                 String                     @default("Unknown")
-  lastName                  String                     @default("Unknown")
-  username                  String?                    @unique
-  useFullName               Boolean                    @default(true)
-  showEmail                 Boolean                    @default(false)
+  firstName                 String   @default("Unknown")
+  lastName                  String   @default("Unknown")
+  username                  String?  @unique
+  useFullName               Boolean  @default(true)
+  showEmail                 Boolean  @default(false)
   codePostal                String?
   nomCommune                String?
   attendedEvents            Attendee[]
   comments                  Comment[]
-  organizedEvents           Event[]                    @relation("UserEvents")
-  ownedGroups               Group[]                    @relation("GroupOwnership")
+  organizedEvents           Event[]                   @relation("UserEvents")
+  ownedGroups               Group[]                   @relation("GroupOwnership")
   invites                   Invite[]
   likes                     Like[]
-  messages                  Message[]                  @relation("UserMessages")
-  notifications             Notification[]             @relation("UserNotifications")
-  initiatedNotifications    Notification[]             @relation("NotificationInitiator") 
+  messages                  Message[]                 @relation("UserMessages")
+  notifications             Notification[]            @relation("UserNotifications")
+  initiatedNotifications    Notification[]            @relation("NotificationInitiator") 
   notificationSubscriptions NotificationSubscription[]
   photos                    Photo[]
   posts                     Post[]
   reports                   Report[]
-  following                 UserFollow[]               @relation("FollowingRelation")
-  followers                 UserFollow[]               @relation("FollowerRelation")
+  following                 UserFollow[]              @relation("FollowingRelation")
+  followers                 UserFollow[]              @relation("FollowerRelation")
   votes                     Vote[]
-  groups                    Group[]                    @relation("GroupMembers")
-  conversations             Conversation[]             @relation("UserConversations")
+  groups                    GroupMember[]                   
+  conversations             Conversation[]            @relation("UserConversations")
   commentLikes              CommentLike[]
 }
 
@@ -60,8 +60,8 @@ model Notification {
   eventId      Int?    
   updatedAt    DateTime @updatedAt
 
-  user         User     @relation("UserNotifications", fields: [userId], references: [id])
-  initiator    User?    @relation("NotificationInitiator", fields: [initiatorId], references: [id])
+  user         User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  initiator    User?    @relation("NotificationInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
   event        Event?   @relation(fields: [eventId], references: [id])
 }
 
@@ -70,21 +70,34 @@ model UserFollow {
   followerId  Int
   followingId Int
   createdAt   DateTime @default(now())
-  follower    User     @relation("FollowingRelation", fields: [followerId], references: [id])
-  following   User     @relation("FollowerRelation", fields: [followingId], references: [id])
+
+  follower    User     @relation("FollowingRelation", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("FollowerRelation", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
   @@index([followerId, followingId])
 }
 
 model Group {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   name        String
   description String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
   ownerId     Int
-  owner       User     @relation("GroupOwnership", fields: [ownerId], references: [id])
-  members     User[]   @relation("GroupMembers")
+
+  owner       User      @relation("GroupOwnership", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     GroupMember[]
+}
+
+model GroupMember {
+  id       Int   @id @default(autoincrement())
+  userId   Int
+  groupId  Int
+
+  user     User  @relation(fields: [userId], references: [id], onDelete: Cascade)  
+  group    Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])  
 }
 
 model Report {
@@ -106,7 +119,7 @@ model Report {
   comments    Comment[]
   photos      Photo[]
   event       Event?    @relation("EventReports", fields: [eventId], references: [id])
-  user        User      @relation(fields: [userId], references: [id])
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)  
   votes       Vote[]
 }
 
@@ -117,10 +130,11 @@ model Vote {
   userId    Int
   createdAt DateTime @default(now())
   eventId   Int?
+
   event     Event?   @relation("EventVotes", fields: [eventId], references: [id])
   report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id])
-
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)  
+  
   @@unique([reportId, userId])
 }
 
@@ -137,23 +151,24 @@ model Like {
 }
 
 model Comment {
-  id         Int           @id @default(autoincrement())
+  id         Int       @id @default(autoincrement())
   text       String
-  createdAt  DateTime      @default(now())
+  createdAt  DateTime  @default(now())
   reportId   Int?
   userId     Int
   postId     Int?
   parentId   Int?
-  
+
   parent     Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies    Comment[]     @relation("CommentReplies")
 
   post       Post?         @relation(fields: [postId], references: [id], onDelete: Cascade)
-  report     Report?       @relation(fields: [reportId], references: [id])
-  user       User          @relation(fields: [userId], references: [id])
+  report     Report?       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  likes      CommentLike[]
-  likesCount Int           @default(0) 
+  likes      CommentLike[] @relation("CommentToLike") 
+
+  likesCount Int           @default(0)  
 }
 
 model CommentLike {
@@ -162,24 +177,24 @@ model CommentLike {
   commentId  Int
   createdAt  DateTime  @default(now())
 
-  comment    Comment   @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user       User      @relation(fields: [userId], references: [id])
-
-  @@unique([userId, commentId])  
+  comment    Comment   @relation("CommentToLike", fields: [commentId], references: [id], onDelete: Cascade)  
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Post {
-  id        Int       @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   content   String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   authorId  Int
   latitude  Float?
   longitude Float?
+
   comments  Comment[]
   likes     Like[]
-  author    User      @relation(fields: [authorId], references: [id])
-  photos    Photo[]  
+  photos    Photo[]
+
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
 model Event {
@@ -222,8 +237,9 @@ model Attendee {
   userId  Int
   eventId Int
   status  String
-  event   Event  @relation(fields: [eventId], references: [id])
-  user    User   @relation(fields: [userId], references: [id])
+
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Invite {
@@ -253,8 +269,9 @@ model Message {
   isRead         Boolean      @default(false)
   senderId       Int
   conversationId Int
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
-  sender         User         @relation("UserMessages", fields: [senderId], references: [id])
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("UserMessages", fields: [senderId], references: [id], onDelete: Cascade)
 }
 
 model NotificationSubscription {
