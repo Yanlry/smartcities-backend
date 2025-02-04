@@ -37,6 +37,7 @@ export class ReportController {
       limits: { fileSize: 10 * 1024 * 1024 },
     })
   )
+  
   async createReport(
     @Body() reportData: any,
     @UploadedFiles() photos: Express.Multer.File[]
@@ -109,6 +110,7 @@ export class ReportController {
   async listCategories() {
     return this.reportService.listCategories();
   }
+
   @Get('statistics')
   async getStatisticsByCategory(@Query('nomCommune') nomCommune: string) {
     if (!nomCommune) {

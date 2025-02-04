@@ -159,6 +159,98 @@ export class PostsService {
     }));
   }
 
+  // posts.service.ts
+async listPostsByAuthor(filters: any, authorId: number, cityName?: string) {
+  // Construction de la clause where en filtrant par author.id et éventuellement par ville
+  const whereClause: Prisma.PostWhereInput = {
+    author: {
+      id: authorId,
+      ...(cityName
+        ? {
+            nomCommune: {
+              equals: cityName,
+              mode: 'insensitive',
+            },
+          }
+        : {}),
+    },
+  };
+
+  const posts = await this.prisma.post.findMany({
+    where: whereClause,
+    include: {
+      likes: true,
+      photos: { select: { url: true } },
+      comments: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              useFullName: true,
+              photos: {
+                where: { isProfile: true },
+                select: { url: true },
+              },
+            },
+          },
+          likes: true,
+        },
+      },
+      author: {
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          useFullName: true,
+          nomCommune: true,
+          photos: {
+            where: { isProfile: true },
+            select: { url: true },
+          },
+        },
+      },
+    },
+  });
+
+  return posts.map((post) => ({
+    id: post.id,
+    content: post.content,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+    likesCount: post.likes.length,
+    // Note : Ici, "likedByUser" est évalué avec l'ID de l'auteur spécifié. 
+    // Si vous souhaitez l'évaluer par rapport à l'utilisateur actuellement connecté,
+    // vous devrez adapter cette logique.
+    likedByUser: post.likes.some((like) => like.userId === authorId),
+    authorId: post.author.id,
+    authorName: post.author.useFullName
+      ? `${post.author.firstName} ${post.author.lastName}`
+      : post.author.username || 'Utilisateur inconnu',
+    profilePhoto: post.author.photos[0]?.url || null,
+    nomCommune: post.author.nomCommune || 'Ville inconnue',
+    photos: post.photos.map((photo) => photo.url),
+    comments: post.comments.map((comment) => ({
+      id: comment.id,
+      text: comment.text,
+      createdAt: comment.createdAt,
+      parentId: comment.parentId || null,
+      userId: comment.user?.id || null,
+      userName: comment.user
+        ? comment.user.useFullName
+          ? `${comment.user.firstName} ${comment.user.lastName}`
+          : comment.user.username || 'Utilisateur inconnu'
+        : 'Utilisateur inconnu',
+      userProfilePhoto: comment.user?.photos[0]?.url || null,
+      likesCount: comment.likesCount || 0,
+      likedByUser: comment.likes.some((like) => like.userId === authorId),
+    })),
+  }));
+}
+
   // RÉCUPÈRE UNE PUBLICATION PAR SON ID AVEC LE NOMBRE DE LIKES ET LES PHOTOS ASSOCIÉES
   async getPostById(id: number, userId: number) {
     const post = await this.prisma.post.findUnique({
