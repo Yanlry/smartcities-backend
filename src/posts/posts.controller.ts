@@ -105,15 +105,17 @@ export class PostsController {
     return this.postsService.listPosts(filters, user.id, cityName);
   }
 
-  // posts.controller.ts
-@Get('author/:authorId')
-async listPostsByAuthor(
-  @Param('authorId', ParseIntPipe) authorId: number,
-  @Query() filters: any
-) {
-  const cityName = filters.cityName ? filters.cityName.toUpperCase() : undefined;
-  return this.postsService.listPostsByAuthor(filters, authorId, cityName);
-}
+  // RECUPERER LES POST D'UN AUTEUR
+  @Get('author/:authorId')
+  async listPostsByAuthor(
+    @Param('authorId', ParseIntPipe) authorId: number,
+    @Query() filters: any
+  ) {
+    const cityName = filters.cityName
+      ? filters.cityName.toUpperCase()
+      : undefined;
+    return this.postsService.listPostsByAuthor(filters, authorId, cityName);
+  }
 
   // RÉCUPÈRE LES DÉTAILS D'UNE PUBLICATION SPÉCIFIQUE
   @Get(':id')
@@ -145,7 +147,7 @@ async listPostsByAuthor(
     return this.postsService.toggleLike(postId, userId);
   }
 
-  @Post('comments/:commentId/like')  
+  @Post('comments/:commentId/like')
   async toggleLikeComment(
     @Param('commentId') commentId: number,
     @Body() body: { userId: number }

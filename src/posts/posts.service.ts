@@ -153,103 +153,99 @@ export class PostsService {
             : comment.user.username || 'Utilisateur inconnu'
           : 'Utilisateur inconnu',
         userProfilePhoto: comment.user?.photos[0]?.url || null,
-        likesCount: comment.likesCount || 0,  
-        likedByUser: comment.likes.some((like) => like.userId === userId),  
+        likesCount: comment.likesCount || 0,
+        likedByUser: comment.likes.some((like) => like.userId === userId),
       })),
     }));
   }
 
-  // posts.service.ts
-async listPostsByAuthor(filters: any, authorId: number, cityName?: string) {
-  // Construction de la clause where en filtrant par author.id et éventuellement par ville
-  const whereClause: Prisma.PostWhereInput = {
-    author: {
-      id: authorId,
-      ...(cityName
-        ? {
-            nomCommune: {
-              equals: cityName,
-              mode: 'insensitive',
-            },
-          }
-        : {}),
-    },
-  };
+  async listPostsByAuthor(filters: any, authorId: number, cityName?: string) {
+    // Construction de la clause where en filtrant par author.id et éventuellement par ville
+    const whereClause: Prisma.PostWhereInput = {
+      author: {
+        id: authorId,
+        ...(cityName
+          ? {
+              nomCommune: {
+                equals: cityName,
+                mode: 'insensitive',
+              },
+            }
+          : {}),
+      },
+    };
 
-  const posts = await this.prisma.post.findMany({
-    where: whereClause,
-    include: {
-      likes: true,
-      photos: { select: { url: true } },
-      comments: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              useFullName: true,
-              photos: {
-                where: { isProfile: true },
-                select: { url: true },
+    const posts = await this.prisma.post.findMany({
+      where: whereClause,
+      include: {
+        likes: true,
+        photos: { select: { url: true } },
+        comments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                useFullName: true,
+                photos: {
+                  where: { isProfile: true },
+                  select: { url: true },
+                },
               },
             },
-          },
-          likes: true,
-        },
-      },
-      author: {
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          useFullName: true,
-          nomCommune: true,
-          photos: {
-            where: { isProfile: true },
-            select: { url: true },
+            likes: true,
           },
         },
+        author: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            useFullName: true,
+            nomCommune: true,
+            photos: {
+              where: { isProfile: true },
+              select: { url: true },
+            },
+          },
+        },
       },
-    },
-  });
+    });
 
-  return posts.map((post) => ({
-    id: post.id,
-    content: post.content,
-    createdAt: post.createdAt,
-    updatedAt: post.updatedAt,
-    likesCount: post.likes.length,
-    // Note : Ici, "likedByUser" est évalué avec l'ID de l'auteur spécifié. 
-    // Si vous souhaitez l'évaluer par rapport à l'utilisateur actuellement connecté,
-    // vous devrez adapter cette logique.
-    likedByUser: post.likes.some((like) => like.userId === authorId),
-    authorId: post.author.id,
-    authorName: post.author.useFullName
-      ? `${post.author.firstName} ${post.author.lastName}`
-      : post.author.username || 'Utilisateur inconnu',
-    profilePhoto: post.author.photos[0]?.url || null,
-    nomCommune: post.author.nomCommune || 'Ville inconnue',
-    photos: post.photos.map((photo) => photo.url),
-    comments: post.comments.map((comment) => ({
-      id: comment.id,
-      text: comment.text,
-      createdAt: comment.createdAt,
-      parentId: comment.parentId || null,
-      userId: comment.user?.id || null,
-      userName: comment.user
-        ? comment.user.useFullName
-          ? `${comment.user.firstName} ${comment.user.lastName}`
-          : comment.user.username || 'Utilisateur inconnu'
-        : 'Utilisateur inconnu',
-      userProfilePhoto: comment.user?.photos[0]?.url || null,
-      likesCount: comment.likesCount || 0,
-      likedByUser: comment.likes.some((like) => like.userId === authorId),
-    })),
-  }));
-}
+    return posts.map((post) => ({
+      id: post.id,
+      content: post.content,
+      createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+      likesCount: post.likes.length,
+      likedByUser: post.likes.some((like) => like.userId === authorId),
+      authorId: post.author.id,
+      authorName: post.author.useFullName
+        ? `${post.author.firstName} ${post.author.lastName}`
+        : post.author.username || 'Utilisateur inconnu',
+      profilePhoto: post.author.photos[0]?.url || null,
+      nomCommune: post.author.nomCommune || 'Ville inconnue',
+      photos: post.photos.map((photo) => photo.url),
+      comments: post.comments.map((comment) => ({
+        id: comment.id,
+        text: comment.text,
+        createdAt: comment.createdAt,
+        parentId: comment.parentId || null,
+        userId: comment.user?.id || null,
+        userName: comment.user
+          ? comment.user.useFullName
+            ? `${comment.user.firstName} ${comment.user.lastName}`
+            : comment.user.username || 'Utilisateur inconnu'
+          : 'Utilisateur inconnu',
+        userProfilePhoto: comment.user?.photos[0]?.url || null,
+        likesCount: comment.likesCount || 0,
+        likedByUser: comment.likes.some((like) => like.userId === authorId),
+      })),
+    }));
+  }
 
   // RÉCUPÈRE UNE PUBLICATION PAR SON ID AVEC LE NOMBRE DE LIKES ET LES PHOTOS ASSOCIÉES
   async getPostById(id: number, userId: number) {
@@ -274,6 +270,9 @@ async listPostsByAuthor(filters: any, authorId: number, cityName?: string) {
                   select: { url: true },
                 },
               },
+            },
+            likes: {
+              select: { id: true, userId: true },
             },
           },
         },
@@ -349,6 +348,8 @@ async listPostsByAuthor(filters: any, authorId: number, cityName?: string) {
               : comment.user.username || 'Utilisateur inconnu'
             : 'Utilisateur inconnu',
           userProfilePhoto: comment.user?.photos[0]?.url || null,
+          likedByUser: comment.likes.some((like) => like.userId === userId), 
+          likesCount: comment.likes.length,
         }))
       ),
     };
@@ -423,61 +424,68 @@ async listPostsByAuthor(filters: any, authorId: number, cityName?: string) {
       where: { id: commentId },
       select: { userId: true, postId: true, likesCount: true },
     });
-  
+
     if (!comment) {
       throw new BadRequestException("Le commentaire n'existe pas.");
     }
-  
+
     const existingLike = await this.prisma.commentLike.findFirst({
       where: { commentId, userId },
     });
-  
+
     let liked = false;
     let updatedLikesCount = comment.likesCount;
-  
+
     if (existingLike) {
       await this.prisma.commentLike.delete({ where: { id: existingLike.id } });
-  
-      updatedLikesCount = Math.max(0, updatedLikesCount - 1);  
+
+      updatedLikesCount = Math.max(0, updatedLikesCount - 1);
       await this.updateUserTrustRate(userId, -0.5);
     } else {
       await this.prisma.commentLike.create({ data: { commentId, userId } });
-  
+
       updatedLikesCount += 1;
       liked = true;
       await this.updateUserTrustRate(userId, 0.5);
-  
+
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { firstName: true, lastName: true, username: true, useFullName: true },
+        select: {
+          firstName: true,
+          lastName: true,
+          username: true,
+          useFullName: true,
+        },
       });
-  
+
       if (comment.userId && user) {
         const likerName = user.useFullName
           ? `${user.firstName} ${user.lastName}`
-          : user.username || "Un utilisateur";
-  
+          : user.username || 'Un utilisateur';
+
         const notificationMessage = `${likerName} a aimé votre commentaire.`;
-  
+
         await this.notificationService.createNotification(
           comment.userId,
           notificationMessage,
-          "COMMENT_LIKE",
+          'COMMENT_LIKE',
           comment.postId,
           userId
         );
       }
     }
-   
+
     await this.prisma.comment.update({
       where: { id: commentId },
       data: { likesCount: updatedLikesCount },
     });
-  
+
     return {
-      message: liked ? "Bravo, vous avez liké ce commentaire" : "Vous venez de déliker ce commentaire",
+      message: liked
+        ? 'Bravo, vous avez liké ce commentaire'
+        : 'Vous venez de déliker ce commentaire',
       liked,
-      likesCount: updatedLikesCount,  
+      likesCount: updatedLikesCount,
     };
   }
 
