@@ -197,6 +197,9 @@ export class UserService {
               select: {
                 id: true,
                 username: true,
+                firstName: true,
+                lastName: true,
+                useFullName: true,
                 photos: {
                   where: { isProfile: true },
                   select: { url: true },
@@ -211,6 +214,9 @@ export class UserService {
               select: {
                 id: true,
                 username: true,
+                firstName: true,
+                lastName: true,
+                useFullName: true,
                 photos: {
                   where: { isProfile: true },
                   select: { url: true },
@@ -221,27 +227,27 @@ export class UserService {
         },
       },
     });
-
+  
     if (!user) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
-
+  
     const usersInCity = await this.prisma.user.findMany({
       where: { nomCommune: user.nomCommune },
       include: {
         votes: true,
       },
     });
-
+  
     const usersWithVoteCount = usersInCity.map((u) => ({
       id: u.id,
       voteCount: u.votes.length,
     }));
-
+  
     usersWithVoteCount.sort((a, b) => b.voteCount - a.voteCount);
-
+  
     const ranking = usersWithVoteCount.findIndex((u) => u.id === userId) + 1;
-
+  
     return {
       ...user,
       email: user.showEmail ? user.email : null,
@@ -249,16 +255,23 @@ export class UserService {
       followers: user.followers.map((f) => ({
         id: f.follower.id,
         username: f.follower.username,
+        firstName: f.follower.firstName,
+        lastName: f.follower.lastName,
+        useFullName: f.follower.useFullName,
         profilePhoto: f.follower.photos[0]?.url || null,
       })),
       following: user.following.map((f) => ({
         id: f.following.id,
         username: f.following.username,
+        firstName: f.following.firstName,
+        lastName: f.following.lastName,
+        useFullName: f.following.useFullName,
         profilePhoto: f.following.photos[0]?.url || null,
       })),
       ranking,
     };
   }
+  
 
   async updateEmailVisibility(userId: number, showEmail: boolean) {
     const user = await this.prisma.user.update({
