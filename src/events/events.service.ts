@@ -197,6 +197,10 @@ export class EventsService {
             lastName: true,
             username: true,
             useFullName: true,
+            photos: { // Ajout de cette partie
+              where: { isProfile: true },
+              select: { url: true },
+            },
           },
         },
       },
@@ -377,16 +381,31 @@ export class EventsService {
   }
 
   async leaveEvent(eventId: number, userId: number) {
+    // Vérifier si l'utilisateur est l'organisateur
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { organizerId: true },
+    });
+    
+    if (!event) {
+      throw new NotFoundException('Événement non trouvé.');
+    }
+    
+    // Empêcher l'organisateur de se désinscrire
+    if (event.organizerId === userId) {
+      throw new ForbiddenException('L\'organisateur ne peut pas se désinscrire de son propre événement.');
+    }
+  
     const attendee = await this.prisma.attendee.findFirst({
       where: { eventId, userId },
     });
-
+  
     if (!attendee) {
       throw new BadRequestException(
         "L'utilisateur n'est pas inscrit à cet événement."
       );
     }
-
+  
     return this.prisma.attendee.delete({
       where: { id: attendee.id },
     });

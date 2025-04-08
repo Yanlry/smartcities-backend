@@ -9,6 +9,7 @@ import {
   BadRequestException,
   UseInterceptors,
   UploadedFiles,
+  ForbiddenException,
   Query,
   Logger,
 } from '@nestjs/common';
@@ -174,6 +175,13 @@ export class EventsController {
       const result = await this.eventsService.leaveEvent(eventId, userId);
       return { message: 'Désinscription réussie.', result };
     } catch (error) {
+      // Vérifier le type d'exception et la préserver
+      if (error instanceof ForbiddenException) {
+        // Laisser passer l'exception ForbiddenException sans la transformer
+        throw error;
+      }
+      
+      // Pour les autres erreurs, conserver le comportement existant
       throw new BadRequestException(
         `Erreur lors de la désinscription de l'événement : ${error.message}`
       );
