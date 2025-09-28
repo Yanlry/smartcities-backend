@@ -27,6 +27,36 @@ export class AuthController {
     private readonly s3Service: S3Service
   ) {}
 
+  // CORRIGÉ: Endpoint pour vérifier la disponibilité d'un nom d'utilisateur
+  @Post('check-username')
+  async checkUsername(@Body('username') username: string) {
+    // Si le username est disponible, la méthode retourne true
+    // Si le username est pris, la méthode lance une ConflictException (409)
+    await this.authService.checkUsernameAvailability(username);
+    
+    // Si on arrive ici, c'est que le username est disponible
+    return {
+      success: true,
+      available: true,
+      message: 'Nom d\'utilisateur disponible'
+    };
+  }
+
+  // CORRIGÉ: Endpoint pour vérifier la disponibilité d'un email
+  @Post('check-email')
+  async checkEmail(@Body('email') email: string) {
+    // Si l'email est disponible, la méthode retourne true
+    // Si l'email est pris, la méthode lance une ConflictException (409)
+    await this.authService.checkEmailAvailability(email);
+    
+    // Si on arrive ici, c'est que l'email est disponible
+    return {
+      success: true,
+      available: true,
+      message: 'Adresse email disponible'
+    };
+  }
+
   @Post('signup')
   @UseInterceptors(
     FilesInterceptor('photos', 1, {

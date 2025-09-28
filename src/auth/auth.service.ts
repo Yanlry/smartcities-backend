@@ -12,6 +12,7 @@ import { hash, compare } from 'bcrypt';
 import * as sgMail from '@sendgrid/mail';
 import { v4 as uuidv4 } from 'uuid';
 import { JwtPayload } from 'jsonwebtoken';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -19,6 +20,54 @@ export class AuthService {
     private jwtService: JwtService
   ) {
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  }
+
+  // NOUVEAU: Vérifier si un nom d'utilisateur est disponible
+  async checkUsernameAvailability(username: string): Promise<boolean> {
+    // Validation basique
+    if (!username || username.trim().length < 3) {
+      throw new BadRequestException('Le nom d\'utilisateur doit contenir au moins 3 caractères');
+    }
+
+    // Recherche dans la base de données
+    const existingUser = await this.prisma.user.findFirst({
+      where: { 
+        username: {
+          equals: username.trim(),
+          mode: 'insensitive' // Comparaison insensible à la casse
+        }
+      },
+    });
+
+    // Si on trouve un utilisateur, le nom n'est pas disponible
+    if (existingUser) {
+      throw new ConflictException('Ce nom d\'utilisateur est déjà pris');
+    }
+
+    // Si on arrive ici, le nom d'utilisateur est disponible
+    return true;
+  }
+
+  // NOUVEAU: Vérifier si un email est disponible
+  async checkEmailAvailability(email: string): Promise<boolean> {
+    // Validation basique de l'email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      throw new BadRequestException('Format d\'email invalide');
+    }
+
+    // Recherche dans la base de données
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+
+    // Si on trouve un utilisateur, l'email n'est pas disponible
+    if (existingUser) {
+      throw new ConflictException('Cette adresse email est déjà utilisée');
+    }
+
+    // Si on arrive ici, l'email est disponible
+    return true;
   }
 
   async signup(
@@ -39,11 +88,25 @@ export class AuthService {
       throw new BadRequestException('No valid photo URLs provided');
     }
 
+    // MODIFIÉ: Vérification de l'email existant (gardé tel quel)
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
     if (existingUser) {
       throw new ConflictException('Cet email est déjà utilisé.');
+    }
+
+    // NOUVEAU: Vérification du nom d'utilisateur existant
+    const existingUsername = await this.prisma.user.findFirst({
+      where: { 
+        username: {
+          equals: username.trim(),
+          mode: 'insensitive'
+        }
+      },
+    });
+    if (existingUsername) {
+      throw new ConflictException('Ce nom d\'utilisateur est déjà pris.');
     }
 
     const hashedPassword = await hash(password, 10);
@@ -245,7 +308,7 @@ export class AuthService {
           </span>
         </div>
         <p>Copiez ce token et utilisez-le sur l'application pour réinitialiser votre mot de passe.</p>
-        <p>Si vous n’avez pas demandé cette réinitialisation, veuillez nous le signaler immédiatement. Une tentative de fraude pourrait être en cours.</p>
+        <p>Si vous n'avez pas demandé cette réinitialisation, veuillez nous le signaler immédiatement. Une tentative de fraude pourrait être en cours.</p>
         <p>Merci,<br>L'équipe Support</p>
         <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
       </div>
