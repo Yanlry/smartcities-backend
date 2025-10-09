@@ -1,3 +1,5 @@
+// Chemin : backend/src/user/user.controller.ts
+
 import {
   Controller,
   Patch,
@@ -14,6 +16,7 @@ import {
   UseGuards,
   NotFoundException,
   HttpStatus,
+  ParseIntPipe
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -32,6 +35,10 @@ export class UserController {
     private readonly s3Service: S3Service,
     private readonly prisma: PrismaService
   ) {}
+
+  // ========================================
+  // ROUTES GÉNÉRALES (sans paramètres)
+  // ========================================
 
   // LISTE LES UTILISATEURS AVEC DES FILTRES OPTIONNELS
   @Get()
@@ -52,7 +59,6 @@ export class UserController {
     if (!cityName) {
       throw new BadRequestException('Le nom de la ville est requis.');
     }
-
     return this.userService.getUserRanking(userId, cityName);
   }
 
@@ -94,14 +100,31 @@ export class UserController {
     return this.userService.updateEmailVisibility(body.userId, body.showEmail);
   }
 
-  // RÉCUPÈRE LE PROFIL D'UN UTILISATEUR PAR SON ID
-  @Get(':id')
-  async getUserById(@Param('id') id: string) {
-    const userId = parseInt(id, 10);
-    if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
-    return this.userService.getUserById(userId);
+  // ========================================
+  // ⚠️ ROUTES SPÉCIFIQUES (AVANT :id)
+  // IMPORTANT : Ces routes doivent être AVANT @Get(':id')
+  // ========================================
+
+  // ✅ RÉCUPÉRER TOUS LES COMMENTAIRES D'UN UTILISATEUR
+  @Get(':userId/comments')
+  async getUserComments(@Param('userId', ParseIntPipe) userId: number) {
+    return await this.userService.getUserComments(userId);
   }
 
+  // ✅ NOUVEAU : RÉCUPÉRER TOUS LES VOTES D'UN UTILISATEUR
+  @Get(':userId/votes')
+  async getUserVotes(@Param('userId', ParseIntPipe) userId: number) {
+    console.log(`📊 Route appelée : GET /users/${userId}/votes`);
+    return await this.userService.getUserVotes(userId);
+  }
+
+  // RÉCUPÉRER LES STATISTIQUES D'UN UTILISATEUR
+  @Get('stats/:userId')
+  async getUserStats(@Param('userId', ParseIntPipe) userId: number) {
+    return await this.userService.getUserStats(userId);
+  }
+
+  // METTRE À JOUR LA PHOTO DE PROFIL
   @Post(':userId/profile-image')
   @UseInterceptors(
     FilesInterceptor('profileImage', 1, {
@@ -109,7 +132,7 @@ export class UserController {
     })
   )
   async updateProfileImage(
-    @Param('userId') userId: number,
+    @Param('userId', ParseIntPipe) userId: number,
     @UploadedFiles() files: Express.Multer.File[],
     @Request() req: Request
   ) {
@@ -147,20 +170,14 @@ export class UserController {
     }
   }
 
-  // RECUPERER LE NOMBRE DE FOLLOWER D'UN UTILISATEUR
-  @Get(':id')
-  async getUserWithFollowers(@Param('id') userId: string) {
-    return this.userService.getUserWithFollowers(Number(userId));
-  }
-
   // SUIVRE UN UTILISATEUR
   @Post(':id/follow')
   async followUser(
-    @Param('id') userId: string,
+    @Param('id', ParseIntPipe) userId: number,
     @Body('followerId') followerId: number
   ) {
     try {
-      const follow = await this.userService.followUser(+userId, followerId);
+      const follow = await this.userService.followUser(userId, followerId);
 
       return {
         success: true,
@@ -183,34 +200,19 @@ export class UserController {
     }
   }
 
-  // UNFOLLOW UN UTILISATEUR
+  // NE PLUS SUIVRE UN UTILISATEUR
   @Delete(':id/unfollow')
-  unfollowUser(
-    @Param('id') userId: string,
+  async unfollowUser(
+    @Param('id', ParseIntPipe) userId: number,
     @Body('followerId') followerId: number
   ) {
-    return this.userService.unfollowUser(+userId, followerId);
+    return this.userService.unfollowUser(userId, followerId);
   }
 
-  @Put(':id')
-  async updateUser(
-    @Param('id') id: string,
-    @Body() updateUserData: UpdateUserDto
-  ) {
-    const userId = parseInt(id, 10);
-    if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
-
-    const updatedUser = await this.userService.updateUser(
-      userId,
-      updateUserData
-    );
-
-    return { message: 'Profil mis à jour avec succès', user: updatedUser };
-  }
-
+  // CHANGER LE MOT DE PASSE
   @Put(':id/change-password')
   async changePassword(
-    @Param('id') userId: number,
+    @Param('id', ParseIntPipe) userId: number,
     @Body() changePasswordDto: ChangePasswordDto
   ) {
     return this.userService.changePassword(
@@ -220,17 +222,31 @@ export class UserController {
     );
   }
 
-  @Get('/stats/:userId')
-  async getUserStats(@Param('userId') userId: number) {
-    return await this.userService.getUserStats(userId);
+  // ========================================
+  // ROUTES GÉNÉRIQUES (AVEC :id)
+  // ⚠️ IMPORTANT : Toujours mettre à la fin !
+  // ========================================
+
+  // RÉCUPÈRE LE PROFIL D'UN UTILISATEUR PAR SON ID
+  @Get(':id')
+  async getUserById(@Param('id', ParseIntPipe) id: number) {
+    return this.userService.getUserById(id);
+  }
+
+  // METTRE À JOUR UN UTILISATEUR
+  @Put(':id')
+  async updateUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateUserData: UpdateUserDto
+  ) {
+    const updatedUser = await this.userService.updateUser(id, updateUserData);
+    return { message: 'Profil mis à jour avec succès', user: updatedUser };
   }
 
   // SUPPRIME LE PROFIL DE L'UTILISATEUR
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
-  async deleteUser(@Param('id') id: string) {
-    const userId = parseInt(id, 10);
-    if (isNaN(userId)) throw new BadRequestException('Invalid user ID');
-    return this.userService.deleteUser(userId);
+  async deleteUser(@Param('id', ParseIntPipe) id: number) {
+    return this.userService.deleteUser(id);
   }
 }

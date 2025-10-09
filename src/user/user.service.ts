@@ -1,9 +1,12 @@
+// Chemin : backend/src/user/user.service.ts
+
 import {
   Injectable,
   NotFoundException,
   forwardRef,
   Inject,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
@@ -87,7 +90,6 @@ export class UserService {
     }));
   }
 
-  // LISTE LES UTILISATEURS AVEC POSSIBILITÉ DE FILTRE
   async listUsers(filter: any) {
     const users = await this.prisma.user.findMany({
       where: filter,
@@ -104,7 +106,6 @@ export class UserService {
     return users;
   }
 
-  // METTRE À JOUR LA PREFERENCE D'AFFICHAGE DE L'UTILISATEUR
   async updateDisplayPreference(userId: number, useFullName: boolean) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -271,7 +272,6 @@ export class UserService {
       ranking,
     };
   }
-  
 
   async updateEmailVisibility(userId: number, showEmail: boolean) {
     const user = await this.prisma.user.update({
@@ -330,8 +330,7 @@ export class UserService {
   }
 
   async updateUser(userId: number, data: UpdateUserDto) {
-    const { email, username, firstName, lastName, nomCommune, codePostal } =
-      data;
+    const { email, username, firstName, lastName, nomCommune, codePostal } = data;
 
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
@@ -494,7 +493,6 @@ export class UserService {
     return follow;
   }
 
-  // SE DESABONNER D'UN UTILISATEUR
   async unfollowUser(userId: number, followerId: number) {
     return this.prisma.userFollow.deleteMany({
       where: {
@@ -504,7 +502,6 @@ export class UserService {
     });
   }
 
-  // RECUPERE LE NOMBRE DE FOLLOWER D'UN UTILISATEUR
   async getUserWithFollowers(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -523,7 +520,6 @@ export class UserService {
     };
   }
 
-  // SUPPRIME UN UTILISATEUR PAR SON ID
   async deleteUser(userId: number) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Utilisateur non trouvé');
@@ -531,4 +527,195 @@ export class UserService {
     await this.prisma.user.delete({ where: { id: userId } });
     return { message: 'Utilisateur supprimé avec succès' };
   }
+
+  // ========================================
+  // 🩺 VERSION AVEC LOGS POUR DIAGNOSTIC
+  // ========================================
+  async getUserComments(userId: number) {
+    try {
+      console.log('=== DÉBUT getUserComments ===');
+      console.log('userId reçu:', userId);
+      console.log('Type de userId:', typeof userId);
+
+      // ÉTAPE 1 : Vérifier que l'utilisateur existe
+      console.log('ÉTAPE 1: Vérification de l\'utilisateur...');
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      console.log('Utilisateur trouvé:', user ? 'OUI' : 'NON');
+
+      if (!user) {
+        console.log('❌ Utilisateur non trouvé !');
+        throw new NotFoundException('Utilisateur non trouvé');
+      }
+
+      // ÉTAPE 2 : Récupérer les commentaires
+      console.log('ÉTAPE 2: Récupération des commentaires...');
+      const comments = await this.prisma.comment.findMany({
+        where: { userId },
+        include: {
+          post: {
+            select: {
+              id: true,
+              content: true,
+              createdAt: true,
+              author: {
+                select: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                  useFullName: true,
+                },
+              },
+            },
+          },
+          likes: {
+            select: {
+              id: true,
+              userId: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              useFullName: true,
+              photos: {
+                where: { isProfile: true },
+                select: { url: true },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+      
+      console.log('Nombre de commentaires trouvés:', comments.length);
+
+      // ÉTAPE 3 : Formater les commentaires
+      console.log('ÉTAPE 3: Formatage des commentaires...');
+      const formattedComments = comments.map((comment, index) => {
+        console.log(`Formatage commentaire ${index + 1}/${comments.length}`);
+        
+        return {
+          id: comment.id,
+          text: comment.text,
+          createdAt: comment.createdAt,
+          likesCount: comment.likes?.length || 0,
+          post: {
+            id: comment.post?.id || null,
+            content: comment.post?.content || '',
+            createdAt: comment.post?.createdAt || new Date(),
+            authorName: comment.post?.author?.useFullName
+              ? `${comment.post.author.firstName} ${comment.post.author.lastName}`
+              : comment.post?.author?.username || 'Utilisateur inconnu',
+          },
+          user: {
+            id: comment.user?.id || userId,
+            name: comment.user?.useFullName
+              ? `${comment.user.firstName} ${comment.user.lastName}`
+              : comment.user?.username || 'Utilisateur inconnu',
+            profilePhoto: comment.user?.photos?.[0]?.url || null,
+          },
+        };
+      });
+
+      console.log('✅ Formatage terminé avec succès');
+      console.log('=== FIN getUserComments ===');
+      
+      return formattedComments;
+
+    } catch (error) {
+      console.error('❌ ERREUR dans getUserComments:');
+      console.error('Message d\'erreur:', error.message);
+      console.error('Stack trace:', error.stack);
+      
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      
+      throw new InternalServerErrorException(
+        `Erreur lors de la récupération des commentaires: ${error.message}`
+      );
+    }
+  }
+
+  // ========================================
+// RÉCUPÉRER TOUS LES VOTES D'UN UTILISATEUR
+// ========================================
+async getUserVotes(userId: number) {
+  try {
+    console.log(`📊 Récupération des votes pour l'utilisateur ${userId}`);
+
+    // On récupère tous les votes de l'utilisateur avec les détails du signalement
+    const votes = await this.prisma.vote.findMany({
+      where: {
+        userId: userId,
+      },
+      include: {
+        report: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                username: true,
+                useFullName: true,
+              },
+            },
+            photos: {
+              select: {
+                url: true,
+              },
+            },
+            votes: true, // Pour avoir le total de votes du signalement
+            comments: true, // Pour avoir le nombre de commentaires
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc', // Les votes les plus récents en premier
+      },
+    });
+
+    console.log(`✅ ${votes.length} votes trouvés pour l'utilisateur ${userId}`);
+
+    // On formate les données pour le frontend
+    const formattedVotes = votes.map((vote) => ({
+      id: vote.id,
+      type: vote.type, // "up" ou "down"
+      createdAt: vote.createdAt,
+      report: {
+        id: vote.report.id,
+        title: vote.report.title,
+        description: vote.report.description,
+        type: vote.report.type,
+        city: vote.report.city,
+        createdAt: vote.report.createdAt,
+        authorName: vote.report.user.useFullName
+          ? `${vote.report.user.firstName} ${vote.report.user.lastName}`
+          : vote.report.user.username || 'Utilisateur inconnu',
+        authorId: vote.report.user.id,
+        photos: vote.report.photos.map((photo) => photo.url),
+        upVotes: vote.report.upVotes,
+        downVotes: vote.report.downVotes,
+        commentsCount: vote.report.comments.length,
+      },
+    }));
+
+    return formattedVotes;
+  } catch (error) {
+    console.error(
+      `❌ Erreur lors de la récupération des votes de l'utilisateur ${userId}:`,
+      error
+    );
+    throw new Error('Impossible de récupérer les votes de cet utilisateur');
+  }
+}
 }
