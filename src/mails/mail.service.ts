@@ -1,43 +1,67 @@
 import { Injectable } from '@nestjs/common';
-import * as sgMail from '@sendgrid/mail';
+// ✅ IMPORT CORRECT pour Mailjet avec TypeScript/NestJS
+const Mailjet = require('node-mailjet');
 
 @Injectable()
 export class MailService {
+  // Variable pour stocker l'instance Mailjet
+  private mailjet: any;
+
   constructor() {
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
+    // ✅ Configuration de Mailjet avec tes clés API
+    // On utilise .apiConnect() qui est la méthode recommandée
+    this.mailjet = Mailjet.apiConnect(
+      process.env.MAILJET_API_KEY || '',
+      process.env.MAILJET_SECRET_KEY || ''
+    );
   }
 
   /**
    * Envoie un email à un destinataire avec un style professionnel.
-   * @param to - Adresse email du destinataire
+   * 
+   * ✅ CORRIGÉ : Gère maintenant AUSSI le signalement de rapports
+   * 
+   * @param to - Adresse email du destinataire (qui recevra le signalement)
    * @param subject - Sujet de l'email
-   * @param text - Texte brut de l'email
-   * @param data - Données supplémentaires pour personnalisation
+   * @param data - Toutes les informations sur le signalement
    */
   async sendEmail(
     to: string,
     subject: string,
     data: {
-      reporterId: string;
-      userId?: string;
-      conversationId?: string;
-      commentId?: string;
-      reportReason: string;
+      reporterId: string;      // ID de la personne qui signale
+      userId?: string;          // ID du profil signalé (optionnel)
+      conversationId?: string;  // ID de la conversation signalée (optionnel)
+      commentId?: string;       // ID du commentaire signalé (optionnel)
+      reportId?: string;        // ✅ AJOUT : ID du rapport signalé (optionnel)
+      reportReason: string;     // Raison du signalement
     }
   ): Promise<void> {
-    const { reporterId, userId, conversationId, commentId, reportReason } = data;
+    // ✅ CORRECTION : On récupère AUSSI reportId maintenant
+    const { 
+      reporterId, 
+      userId, 
+      conversationId, 
+      commentId, 
+      reportId,                 // ✅ AJOUT : On récupère reportId
+      reportReason 
+    } = data;
   
     try {
-      console.log('Données utilisées pour générer l\'email :', {
+      // On affiche dans la console ce qu'on va envoyer (utile pour déboguer)
+      console.log('📧 Préparation de l\'email avec les données suivantes :', {
         to,
         subject,
         reporterId,
         userId,
         conversationId,
         commentId,
+        reportId,               // ✅ AJOUT : On affiche reportId dans les logs
         reportReason,
       });
   
+      // ✅ Template HTML de l'email (design professionnel)
+      // ✅ CORRIGÉ : On ajoute le support de reportId dans le HTML
       const styledHtml = `
         <!DOCTYPE html>
         <html>
@@ -110,13 +134,15 @@ export class MailService {
               <div class="content">
                 <h2>Détails du signalement :</h2>
                 <div class="details">
-                  ${userId ? `<p><strong>Type :</strong> Profil signalé</p>` : ''}
-                  ${conversationId ? `<p><strong>Type :</strong> Conversation signalée</p>` : ''}
-                  ${commentId ? `<p><strong>Type :</strong> Commentaire signalé</p>` : ''}
+                  ${userId ? `<p><strong>Type :</strong> Profil inaproprié</p>` : ''}
+                  ${conversationId ? `<p><strong>Type :</strong> Conversation inaproprié</p>` : ''}
+                  ${commentId ? `<p><strong>Type :</strong> Commentaire inaproprié</p>` : ''}
+                  ${reportId ? `<p><strong>Type :</strong> Signalement inaproprié</p>` : ''}
                   ${userId ? `<p><strong>ID du profil :</strong> ${userId}</p>` : ''}
                   ${conversationId ? `<p><strong>ID de la conversation :</strong> ${conversationId}</p>` : ''}
                   ${commentId ? `<p><strong>ID du commentaire :</strong> ${commentId}</p>` : ''}
-                  <p><strong>Signalé par :</strong> ${reporterId}</p>
+                  ${reportId ? `<p><strong>ID du signalement :</strong> ${reportId}</p>` : ''}
+                  <p><strong>Signalé par l'utilsateur numéro :</strong> ${reporterId}</p>
                   <p><strong>Raison :</strong> ${reportReason}</p>
                 </div>
                 <p>Merci de prendre les mesures nécessaires pour résoudre ce signalement.</p>
@@ -129,20 +155,42 @@ export class MailService {
           </body>
         </html>`;
   
-      const msg = {
-        to,
-        from: 'yannleroy23@gmail.com',
-        subject,
-        text: `${commentId ? `Commentaire signalé : ${commentId}` : ''}, Raison : ${reportReason}`,
-        html: styledHtml,
-      };
+      // ✅ ENVOI DE L'EMAIL AVEC MAILJET
+      // C'est ici qu'on envoie vraiment l'email
+      const request = await this.mailjet
+        .post('send', { version: 'v3.1' })  // On utilise l'API v3.1 de Mailjet
+        .request({
+          Messages: [  // On peut envoyer plusieurs messages, mais ici on en envoie qu'un seul
+            {
+              From: {  // L'expéditeur de l'email
+                Email: process.env.MAILJET_SENDER_EMAIL || 'yannleroy23@gmail.com',
+                Name: 'SmartCities Support',  // Le nom affiché comme expéditeur
+              },
+              To: [  // Le destinataire (ou les destinataires)
+                {
+                  Email: to,  // L'adresse email du destinataire
+                  Name: 'Administrateur',  // Le nom du destinataire
+                },
+              ],
+              Subject: subject,  // Le sujet de l'email
+              // ✅ CORRECTION : On inclut reportId dans le texte brut aussi
+              TextPart: `${commentId ? `Commentaire signalé : ${commentId}` : ''}${reportId ? `Rapport signalé : ${reportId}` : ''}, Raison : ${reportReason}`,
+              HTMLPart: styledHtml,  // Version HTML avec le beau design
+            },
+          ],
+        });
   
-      console.log('Envoi du message avec les données :', msg);
-  
-      await sgMail.send(msg);
-      console.log(`Email envoyé à : ${to}`);
+      // ✅ Si tout s'est bien passé, on affiche un message de succès
+      console.log('✅ Email envoyé avec succès via Mailjet à :', to);
+      console.log('📬 Réponse de Mailjet :', request.body);
+      
     } catch (error) {
-      console.error('Erreur lors de l\'envoi de l\'email :', error.response?.body || error.message);
+      // ❌ Si une erreur se produit, on l'affiche dans la console
+      console.error('❌ Erreur lors de l\'envoi de l\'email avec Mailjet :');
+      console.error('Code d\'erreur :', error.statusCode);
+      console.error('Message d\'erreur :', error.message);
+      
+      // On renvoie l'erreur pour que l'application sache que ça n'a pas fonctionné
       throw new Error('Échec de l\'envoi de l\'email.');
     }
   }

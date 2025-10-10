@@ -62,7 +62,7 @@ model Notification {
 
   user         User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
   initiator    User?    @relation("NotificationInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
-  event        Event?   @relation(fields: [eventId], references: [id])
+  event        Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }
 
 model UserFollow {
@@ -118,7 +118,7 @@ model Report {
   ranking     Int?
   comments    Comment[]
   photos      Photo[]
-  event       Event?    @relation("EventReports", fields: [eventId], references: [id])
+  event       Event?    @relation("EventReports", fields: [eventId], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)  
   votes       Vote[]
 }
@@ -131,7 +131,7 @@ model Vote {
   createdAt DateTime @default(now())
   eventId   Int?
 
-  event     Event?   @relation("EventVotes", fields: [eventId], references: [id])
+  event     Event?   @relation("EventVotes", fields: [eventId], references: [id], onDelete: Cascade)
   report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)  
   
@@ -145,7 +145,7 @@ model Like {
   createdAt DateTime @default(now())
 
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId])  
 }
@@ -209,7 +209,7 @@ model Event {
   latitude      Float          @default(0.0)
   longitude     Float          @default(0.0)
   attendees     Attendee[]
-  organizer     User           @relation("UserEvents", fields: [organizerId], references: [id])
+  organizer     User           @relation("UserEvents", fields: [organizerId], references: [id], onDelete: Cascade)
   invites       Invite[]
   photos        Photo[]
   reports       Report[]       @relation("EventReports")
@@ -248,8 +248,8 @@ model Invite {
   userId  Int
   status  String
   sentAt  DateTime @default(now())
-  event   Event    @relation(fields: [eventId], references: [id])
-  user    User     @relation(fields: [userId], references: [id])
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, userId])
 }
@@ -282,5 +282,5 @@ model NotificationSubscription {
   longitude Float?
   radius    Float?
   createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

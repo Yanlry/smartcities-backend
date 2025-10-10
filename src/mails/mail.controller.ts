@@ -7,6 +7,9 @@ export class MailController {
 
   /**
    * API pour envoyer un email avec style amélioré.
+   * 
+   * ✅ CORRIGÉ : Supporte maintenant AUSSI le signalement de rapports (reportId)
+   * 
    * @param body - Corps de la requête contenant les informations de l'email
    */
   @Post('send')
@@ -20,24 +23,40 @@ export class MailController {
       userId?: string; 
       conversationId?: string;
       commentId?: string;
+      reportId?: string;          // ✅ AJOUT : Support pour signaler un rapport
     },
   ) {
     console.log('Données reçues dans le backend :', body);
   
-    const { to, subject, reporterId, reportReason, userId, conversationId, commentId } = body;
+    // ✅ CORRECTION : On récupère AUSSI reportId maintenant
+    const { 
+      to, 
+      subject, 
+      reporterId, 
+      reportReason, 
+      userId, 
+      conversationId, 
+      commentId,
+      reportId                     // ✅ AJOUT : On récupère reportId
+    } = body;
   
-    if (!reporterId || !reportReason || (!userId && !conversationId && !commentId)) {
+    // ✅ CORRECTION : On accepte AUSSI reportId dans la validation
+    // AVANT : if (!reporterId || !reportReason || (!userId && !conversationId && !commentId))
+    // APRÈS : On ajoute reportId dans la condition
+    if (!reporterId || !reportReason || (!userId && !conversationId && !commentId && !reportId)) {
       throw new BadRequestException(
-        "Les données de signalement sont incomplètes. Un 'userId', 'conversationId', ou 'commentId' est requis.",
+        "Les données de signalement sont incomplètes. Un 'userId', 'conversationId', 'commentId', ou 'reportId' est requis.",
       );
     }
   
+    // ✅ CORRECTION : On envoie AUSSI reportId au service
     await this.mailService.sendEmail(to, subject, {
       reporterId,
       reportReason,
       userId,
       conversationId,
-      commentId, 
+      commentId,
+      reportId,                    // ✅ AJOUT : On passe reportId au service
     });
   
     return { message: 'Email envoyé avec succès' };

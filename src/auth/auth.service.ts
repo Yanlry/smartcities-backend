@@ -9,17 +9,25 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { hash, compare } from 'bcrypt';
-import * as sgMail from '@sendgrid/mail';
+// ✅ CHANGEMENT : Import Mailjet avec la syntaxe qui fonctionne
+const Mailjet = require('node-mailjet');
 import { v4 as uuidv4 } from 'uuid';
 import { JwtPayload } from 'jsonwebtoken';
 
 @Injectable()
 export class AuthService {
+  // ✅ CHANGEMENT : Variable Mailjet avec le type 'any' (simple et qui fonctionne)
+  private mailjet: any;
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService
   ) {
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    // ✅ CHANGEMENT : Configuration Mailjet avec apiConnect() au lieu de new Mailjet()
+    this.mailjet = Mailjet.apiConnect(
+      process.env.MAILJET_API_KEY || '',
+      process.env.MAILJET_SECRET_KEY || ''
+    );
   }
 
   // NOUVEAU: Vérifier si un nom d'utilisateur est disponible
@@ -290,13 +298,14 @@ export class AuthService {
     }
 
     const resetToken = uuidv4();
-    const resetTokenExpiry = new Date(Date.now() + 3600000);
+    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 heure
 
     await this.prisma.user.update({
       where: { email },
       data: { resetToken, resetTokenExpiry },
     });
 
+    // ✅ Template HTML de l'email (identique à avant)
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; padding: 20px; background-color: #F2F4F7;">
         <h2 style="color: #4CAF50;">Réinitialisation de mot de passe</h2>
@@ -314,23 +323,40 @@ export class AuthService {
       </div>
     `;
 
-    const msg = {
-      to: email,
-      from: 'yannleroy23@gmail.com',
-      subject: 'Réinitialisation de mot de passe',
-      html: htmlContent,
-    };
-
     try {
-      await sgMail.send(msg);
+      // ✅ CHANGEMENT : Envoi avec Mailjet au lieu de SendGrid
+      const request = await this.mailjet
+        .post('send', { version: 'v3.1' })
+        .request({
+          Messages: [
+            {
+              From: {
+                Email: process.env.MAILJET_SENDER_EMAIL || 'yannleroy23@gmail.com',
+                Name: 'SmartCities Support',
+              },
+              To: [
+                {
+                  Email: email,
+                  Name: `${user.firstName} ${user.lastName}`,
+                },
+              ],
+              Subject: 'Réinitialisation de mot de passe',
+              HTMLPart: htmlContent,
+            },
+          ],
+        });
+
+      console.log('✅ Email envoyé avec succès via Mailjet:', request.body);
+
       return {
         message:
           'Un email a été envoyé. Veuillez vérifier votre boîte de réception.',
       };
     } catch (error) {
       console.error(
-        "Erreur d'envoi d'email:",
-        error.response ? error.response.body : error
+        "❌ Erreur d'envoi d'email avec Mailjet:",
+        error.statusCode,
+        error.message
       );
       throw new InternalServerErrorException(
         "Un problème est survenu lors de l'envoi de l'email."
