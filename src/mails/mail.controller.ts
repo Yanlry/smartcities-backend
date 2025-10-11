@@ -1,3 +1,5 @@
+// Chemin : backend/src/mails/mail.controller.ts
+
 import { Controller, Post, Body, BadRequestException } from '@nestjs/common';
 import { MailService } from './mail.service';
 
@@ -8,9 +10,12 @@ export class MailController {
   /**
    * API pour envoyer un email avec style amélioré.
    * 
-   * ✅ CORRIGÉ : Supporte maintenant AUSSI le signalement de rapports (reportId)
-   * 
-   * @param body - Corps de la requête contenant les informations de l'email
+   * ✅ Support COMPLET pour signaler:
+   * - Un profil (userId)
+   * - Une conversation (conversationId)
+   * - Un commentaire (commentId)
+   * - Un rapport (reportId)
+   * - Un événement (eventId) 🆕
    */
   @Post('send')
   async sendEmail(
@@ -23,12 +28,13 @@ export class MailController {
       userId?: string; 
       conversationId?: string;
       commentId?: string;
-      reportId?: string;          // ✅ AJOUT : Support pour signaler un rapport
+      reportId?: string;
+      eventId?: string;              // 🆕 AJOUT : Support pour signaler un événement
     },
   ) {
-    console.log('Données reçues dans le backend :', body);
+    console.log('📧 Données reçues dans le backend :', body);
   
-    // ✅ CORRECTION : On récupère AUSSI reportId maintenant
+    // On récupère TOUTES les informations
     const { 
       to, 
       subject, 
@@ -37,28 +43,28 @@ export class MailController {
       userId, 
       conversationId, 
       commentId,
-      reportId                     // ✅ AJOUT : On récupère reportId
+      reportId,
+      eventId                         // 🆕 On récupère eventId
     } = body;
   
-    // ✅ CORRECTION : On accepte AUSSI reportId dans la validation
-    // AVANT : if (!reporterId || !reportReason || (!userId && !conversationId && !commentId))
-    // APRÈS : On ajoute reportId dans la condition
-    if (!reporterId || !reportReason || (!userId && !conversationId && !commentId && !reportId)) {
+    // ✅ Validation : Au moins UN des ID doit être fourni
+    if (!reporterId || !reportReason || (!userId && !conversationId && !commentId && !reportId && !eventId)) {
       throw new BadRequestException(
-        "Les données de signalement sont incomplètes. Un 'userId', 'conversationId', 'commentId', ou 'reportId' est requis.",
+        "❌ Les données de signalement sont incomplètes. Un 'userId', 'conversationId', 'commentId', 'reportId', ou 'eventId' est requis.",
       );
     }
   
-    // ✅ CORRECTION : On envoie AUSSI reportId au service
+    // ✅ On envoie TOUTES les données au service email
     await this.mailService.sendEmail(to, subject, {
       reporterId,
       reportReason,
       userId,
       conversationId,
       commentId,
-      reportId,                    // ✅ AJOUT : On passe reportId au service
+      reportId,
+      eventId,                        // 🆕 On passe eventId au service
     });
   
-    return { message: 'Email envoyé avec succès' };
+    return { message: '✅ Email envoyé avec succès' };
   }
 }
