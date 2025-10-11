@@ -14,6 +14,7 @@ import { MapModule } from './map/map.module';
 import { NotificationModule } from './notification/notification.module';
 import { StatsModule } from './stats/stats.module';
 import { MailModule } from './mails/mail.module';
+import { CityInfoModule } from './cityinfo/cityinfo.module';
 
 @Module({
   imports: [
@@ -31,7 +32,8 @@ import { MailModule } from './mails/mail.module';
     MapModule,
     NotificationModule,
     StatsModule,
-    MailModule
+    MailModule,
+    CityInfoModule,
   ],
   providers: [PrismaService, AppConfigService],
   controllers: [AppConfigController], 

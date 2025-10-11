@@ -284,3 +284,27 @@ model NotificationSubscription {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model CityInfo {
+  id            Int       @id @default(autoincrement())
+  cityName      String    @unique
+  
+  // Informations du maire
+  mayorName     String?
+  mayorPhone    String?
+  mayorPhoto    String?
+  
+  // Informations de la mairie
+  address       String?
+  phone         String?
+  hours         String?
+  
+  // Données complexes (JSON)
+  teamMembers   Json?     // Équipe municipale
+  news          Json?     // Actualités
+  services      Json?     // Services en ligne
+  
+  // Métadonnées
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}

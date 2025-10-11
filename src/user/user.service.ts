@@ -168,6 +168,9 @@ export class UserService {
     };
   }
 
+  // ========================================
+  // 🔧 FONCTION CORRIGÉE : getUserById
+  // ========================================
   async getUserById(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -179,6 +182,7 @@ export class UserService {
         lastName: true,
         firstName: true,
         useFullName: true,
+        isMunicipality: true, // ⬅️ ✅ AJOUT DE CETTE LIGNE (c'était ça le problème !)
         createdAt: true,
         trustRate: true,
         nomCommune: true,
@@ -528,17 +532,12 @@ export class UserService {
     return { message: 'Utilisateur supprimé avec succès' };
   }
 
-  // ========================================
-  // 🩺 VERSION AVEC LOGS POUR DIAGNOSTIC
-  // ========================================
   async getUserComments(userId: number) {
     try {
       console.log('=== DÉBUT getUserComments ===');
       console.log('userId reçu:', userId);
       console.log('Type de userId:', typeof userId);
 
-      // ÉTAPE 1 : Vérifier que l'utilisateur existe
-      console.log('ÉTAPE 1: Vérification de l\'utilisateur...');
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
       });
@@ -549,7 +548,6 @@ export class UserService {
         throw new NotFoundException('Utilisateur non trouvé');
       }
 
-      // ÉTAPE 2 : Récupérer les commentaires
       console.log('ÉTAPE 2: Récupération des commentaires...');
       const comments = await this.prisma.comment.findMany({
         where: { userId },
@@ -597,8 +595,6 @@ export class UserService {
       
       console.log('Nombre de commentaires trouvés:', comments.length);
 
-      // ÉTAPE 3 : Formater les commentaires
-      console.log('ÉTAPE 3: Formatage des commentaires...');
       const formattedComments = comments.map((comment, index) => {
         console.log(`Formatage commentaire ${index + 1}/${comments.length}`);
         
@@ -645,77 +641,72 @@ export class UserService {
     }
   }
 
-  // ========================================
-// RÉCUPÉRER TOUS LES VOTES D'UN UTILISATEUR
-// ========================================
-async getUserVotes(userId: number) {
-  try {
-    console.log(`📊 Récupération des votes pour l'utilisateur ${userId}`);
+  async getUserVotes(userId: number) {
+    try {
+      console.log(`📊 Récupération des votes pour l'utilisateur ${userId}`);
 
-    // On récupère tous les votes de l'utilisateur avec les détails du signalement
-    const votes = await this.prisma.vote.findMany({
-      where: {
-        userId: userId,
-      },
-      include: {
-        report: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                username: true,
-                useFullName: true,
+      const votes = await this.prisma.vote.findMany({
+        where: {
+          userId: userId,
+        },
+        include: {
+          report: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  username: true,
+                  useFullName: true,
+                },
               },
-            },
-            photos: {
-              select: {
-                url: true,
+              photos: {
+                select: {
+                  url: true,
+                },
               },
+              votes: true,
+              comments: true,
             },
-            votes: true, // Pour avoir le total de votes du signalement
-            comments: true, // Pour avoir le nombre de commentaires
           },
         },
-      },
-      orderBy: {
-        createdAt: 'desc', // Les votes les plus récents en premier
-      },
-    });
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
 
-    console.log(`✅ ${votes.length} votes trouvés pour l'utilisateur ${userId}`);
+      console.log(`✅ ${votes.length} votes trouvés pour l'utilisateur ${userId}`);
 
-    // On formate les données pour le frontend
-    const formattedVotes = votes.map((vote) => ({
-      id: vote.id,
-      type: vote.type, // "up" ou "down"
-      createdAt: vote.createdAt,
-      report: {
-        id: vote.report.id,
-        title: vote.report.title,
-        description: vote.report.description,
-        type: vote.report.type,
-        city: vote.report.city,
-        createdAt: vote.report.createdAt,
-        authorName: vote.report.user.useFullName
-          ? `${vote.report.user.firstName} ${vote.report.user.lastName}`
-          : vote.report.user.username || 'Utilisateur inconnu',
-        authorId: vote.report.user.id,
-        photos: vote.report.photos.map((photo) => photo.url),
-        upVotes: vote.report.upVotes,
-        downVotes: vote.report.downVotes,
-        commentsCount: vote.report.comments.length,
-      },
-    }));
+      const formattedVotes = votes.map((vote) => ({
+        id: vote.id,
+        type: vote.type,
+        createdAt: vote.createdAt,
+        report: {
+          id: vote.report.id,
+          title: vote.report.title,
+          description: vote.report.description,
+          type: vote.report.type,
+          city: vote.report.city,
+          createdAt: vote.report.createdAt,
+          authorName: vote.report.user.useFullName
+            ? `${vote.report.user.firstName} ${vote.report.user.lastName}`
+            : vote.report.user.username || 'Utilisateur inconnu',
+          authorId: vote.report.user.id,
+          photos: vote.report.photos.map((photo) => photo.url),
+          upVotes: vote.report.upVotes,
+          downVotes: vote.report.downVotes,
+          commentsCount: vote.report.comments.length,
+        },
+      }));
 
-    return formattedVotes;
-  } catch (error) {
-    console.error(
-      `❌ Erreur lors de la récupération des votes de l'utilisateur ${userId}:`,
-      error
-    );
-    throw new Error('Impossible de récupérer les votes de cet utilisateur');
+      return formattedVotes;
+    } catch (error) {
+      console.error(
+        `❌ Erreur lors de la récupération des votes de l'utilisateur ${userId}:`,
+        error
+      );
+      throw new Error('Impossible de récupérer les votes de cet utilisateur');
+    }
   }
-}
 }
