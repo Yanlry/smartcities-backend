@@ -1,3 +1,5 @@
+// Chemin : backend/prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -18,6 +20,16 @@ model User {
   trustRate                 Float?
   isSubscribed              Boolean  @default(false)
   isMunicipality            Boolean  @default(false)
+  
+  // 🆕 NOUVEAUX CHAMPS POUR LA VALIDATION DES MAIRIES
+  isVerified                Boolean  @default(true)
+  accountStatus             String   @default("active")
+  municipalityName          String?
+  municipalitySIREN         String?
+  municipalityPhone         String?
+  municipalityAddress       String?
+  rejectionReason           String?
+  
   latitude                  Float?
   longitude                 Float?
   firstName                 String   @default("Unknown")
@@ -289,22 +301,18 @@ model CityInfo {
   id            Int       @id @default(autoincrement())
   cityName      String    @unique
   
-  // Informations du maire
   mayorName     String?
   mayorPhone    String?
   mayorPhoto    String?
   
-  // Informations de la mairie
   address       String?
   phone         String?
   hours         String?
   
-  // Données complexes (JSON)
-  teamMembers   Json?     // Équipe municipale
-  news          Json?     // Actualités
-  services      Json?     // Services en ligne
+  teamMembers   Json?
+  news          Json?
+  services      Json?
   
-  // Métadonnées
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }

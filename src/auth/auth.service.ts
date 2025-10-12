@@ -1,3 +1,5 @@
+// Chemin : backend/src/auth/auth.service.ts
+
 import {
   Injectable,
   ConflictException,
@@ -9,72 +11,61 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { hash, compare } from 'bcrypt';
-// ✅ CHANGEMENT : Import Mailjet avec la syntaxe qui fonctionne
+import { MailService } from '../mails/mail.service';
 const Mailjet = require('node-mailjet');
 import { v4 as uuidv4 } from 'uuid';
 import { JwtPayload } from 'jsonwebtoken';
 
 @Injectable()
 export class AuthService {
-  // ✅ CHANGEMENT : Variable Mailjet avec le type 'any' (simple et qui fonctionne)
   private mailjet: any;
 
   constructor(
     private prisma: PrismaService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
+    private mailService: MailService
   ) {
-    // ✅ CHANGEMENT : Configuration Mailjet avec apiConnect() au lieu de new Mailjet()
     this.mailjet = Mailjet.apiConnect(
       process.env.MAILJET_API_KEY || '',
       process.env.MAILJET_SECRET_KEY || ''
     );
   }
 
-  // NOUVEAU: Vérifier si un nom d'utilisateur est disponible
   async checkUsernameAvailability(username: string): Promise<boolean> {
-    // Validation basique
     if (!username || username.trim().length < 3) {
       throw new BadRequestException('Le nom d\'utilisateur doit contenir au moins 3 caractères');
     }
 
-    // Recherche dans la base de données
     const existingUser = await this.prisma.user.findFirst({
       where: { 
         username: {
           equals: username.trim(),
-          mode: 'insensitive' // Comparaison insensible à la casse
+          mode: 'insensitive'
         }
       },
     });
 
-    // Si on trouve un utilisateur, le nom n'est pas disponible
     if (existingUser) {
       throw new ConflictException('Ce nom d\'utilisateur est déjà pris');
     }
 
-    // Si on arrive ici, le nom d'utilisateur est disponible
     return true;
   }
 
-  // NOUVEAU: Vérifier si un email est disponible
   async checkEmailAvailability(email: string): Promise<boolean> {
-    // Validation basique de l'email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email)) {
       throw new BadRequestException('Format d\'email invalide');
     }
 
-    // Recherche dans la base de données
     const existingUser = await this.prisma.user.findUnique({
       where: { email: email.trim().toLowerCase() },
     });
 
-    // Si on trouve un utilisateur, l'email n'est pas disponible
     if (existingUser) {
       throw new ConflictException('Cette adresse email est déjà utilisée');
     }
 
-    // Si on arrive ici, l'email est disponible
     return true;
   }
 
@@ -88,15 +79,21 @@ export class AuthService {
     nomCommune?: string,
     codePostal?: string,
     latitude?: number,
-    longitude?: number
+    longitude?: number,
+    isMunicipality?: boolean,
+    municipalityName?: string,
+    municipalitySIREN?: string,
+    municipalityPhone?: string,
+    municipalityAddress?: string
   ) {
-    console.log('Photo URLs received in create service:', photoUrls);
+    console.log('📝 Début de signup avec les paramètres:', {
+      email,
+      username,
+      isMunicipality,
+      municipalityName,
+      photoUrls: photoUrls?.length || 0
+    });
 
-    if (!photoUrls || photoUrls.length === 0) {
-      throw new BadRequestException('No valid photo URLs provided');
-    }
-
-    // MODIFIÉ: Vérification de l'email existant (gardé tel quel)
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
@@ -104,7 +101,6 @@ export class AuthService {
       throw new ConflictException('Cet email est déjà utilisé.');
     }
 
-    // NOUVEAU: Vérification du nom d'utilisateur existant
     const existingUsername = await this.prisma.user.findFirst({
       where: { 
         username: {
@@ -115,6 +111,13 @@ export class AuthService {
     });
     if (existingUsername) {
       throw new ConflictException('Ce nom d\'utilisateur est déjà pris.');
+    }
+
+    if (!isMunicipality) {
+      if (!photoUrls || photoUrls.length === 0) {
+        throw new BadRequestException('No valid photo URLs provided');
+      }
+      console.log('Photo URLs received in create service:', photoUrls);
     }
 
     const hashedPassword = await hash(password, 10);
@@ -134,29 +137,56 @@ export class AuthService {
         codePostal,
         latitude,
         longitude,
+        isMunicipality: isMunicipality || false,
+        municipalityName: isMunicipality ? municipalityName : null,
+        municipalitySIREN: isMunicipality ? municipalitySIREN : null,
+        municipalityPhone: isMunicipality ? municipalityPhone : null,
+        municipalityAddress: isMunicipality ? municipalityAddress : null,
+        isVerified: !isMunicipality,
+        accountStatus: isMunicipality ? 'pending' : 'active',
       },
     });
 
-    console.log('Utilisateur créé en base de données :', user);
+    console.log('✅ Utilisateur créé en base de données :', user);
 
-    if (photoUrls.length > 0) {
+    if (!isMunicipality && photoUrls.length > 0) {
       const photosData = photoUrls.map((url, index) => ({
         url,
         userId: user.id,
         isProfile: index === 0,
       }));
 
-      console.log("Photos associées à l'utilisateur :", photosData);
+      console.log("📸 Photos associées à l'utilisateur :", photosData);
 
       await this.prisma.photo.createMany({
         data: photosData,
       });
     }
 
+    if (isMunicipality) {
+      console.log('🏛️ Envoi de l\'email d\'inscription mairie via MailService...');
+      
+      try {
+        await this.mailService.sendMunicipalityRegistrationEmail(user);
+        console.log('✅ Email d\'inscription mairie envoyé avec succès');
+      } catch (error) {
+        console.error('❌ ERREUR CRITIQUE lors de l\'envoi de l\'email:');
+        console.error('Message:', error.message);
+        console.error('Stack:', error.stack);
+      }
+      
+      return {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        message: 'Demande d\'inscription envoyée. En attente de validation.',
+      };
+    }
+
     const payload = { userId: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
 
-    console.log('Token généré avec succès :', token);
+    console.log('🎫 Token généré avec succès :', token);
 
     return {
       id: user.id,
@@ -166,10 +196,94 @@ export class AuthService {
     };
   }
 
+  /**
+   * 🆕 NOUVELLE MÉTHODE : Valider ou rejeter une demande de mairie
+   */
+  async validateMunicipality(userId: number, action: 'approve' | 'reject', reason?: string) {
+    console.log(`🔍 Validation de la mairie - UserID: ${userId}, Action: ${action}`);
+
+    // 1️⃣ On récupère l'utilisateur depuis la base de données
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    if (!user.isMunicipality) {
+      throw new BadRequestException('Cet utilisateur n\'est pas une mairie');
+    }
+
+    // 2️⃣ On met à jour le statut de l'utilisateur selon l'action
+    if (action === 'approve') {
+      console.log('✅ Approbation de la mairie...');
+      
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          isVerified: true,
+          accountStatus: 'active',
+        },
+      });
+
+      // 3️⃣ On envoie l'email d'approbation à la mairie
+      await this.mailService.sendMunicipalityApprovalEmail(user);
+
+      return {
+        message: 'Mairie approuvée avec succès. Un email de confirmation a été envoyé.',
+        user: {
+          id: user.id,
+          email: user.email,
+          municipalityName: user.municipalityName,
+          status: 'active',
+        },
+      };
+    } else if (action === 'reject') {
+      console.log('❌ Rejet de la mairie...');
+      
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          isVerified: false,
+          accountStatus: 'rejected',
+          rejectionReason: reason || 'Votre demande n\'a pas été approuvée.',
+        },
+      });
+
+      // 3️⃣ On envoie l'email de rejet à la mairie
+      await this.mailService.sendMunicipalityRejectionEmail(user, reason);
+
+      return {
+        message: 'Mairie rejetée. Un email a été envoyé pour informer l\'utilisateur.',
+        user: {
+          id: user.id,
+          email: user.email,
+          municipalityName: user.municipalityName,
+          status: 'rejected',
+        },
+      };
+    }
+
+    throw new BadRequestException('Action invalide. Utilisez "approve" ou "reject".');
+  }
+
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
+    
     if (!user || !(await compare(password, user.password))) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
+    }
+
+    if (user.isMunicipality && !user.isVerified) {
+      throw new UnauthorizedException(
+        'Votre compte est en attente de validation. Vous recevrez un email une fois votre compte approuvé.'
+      );
+    }
+
+    if (user.accountStatus === 'rejected') {
+      const reason = user.rejectionReason || 'Votre demande a été rejetée.';
+      throw new UnauthorizedException(`Accès refusé. ${reason}`);
     }
 
     const payload = { userId: user.id, email: user.email };
@@ -195,26 +309,19 @@ export class AuthService {
   }
 
   async refreshToken(refreshToken: string) {
-    console.log(
-      'Tentative de rafraîchissement avec refreshToken :',
-      refreshToken
-    );
+    console.log('Tentative de rafraîchissement avec refreshToken :', refreshToken);
 
     const refreshPayload = this.jwtService.verify<JwtPayload>(refreshToken);
     console.log('Payload extrait du refresh token :', refreshPayload);
 
     const userId = refreshPayload?.userId;
     if (!userId) {
-      throw new UnauthorizedException(
-        'Refresh token invalide (userId manquant)'
-      );
+      throw new UnauthorizedException('Refresh token invalide (userId manquant)');
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.refreshToken) {
-      throw new UnauthorizedException(
-        'Utilisateur introuvable ou refresh token manquant'
-      );
+      throw new UnauthorizedException('Utilisateur introuvable ou refresh token manquant');
     }
 
     const isRefreshTokenValid = await compare(refreshToken, user.refreshToken);
@@ -291,21 +398,18 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email } });
 
     if (!user) {
-      console.log(
-        `Tentative de réinitialisation pour un email inexistant: ${email}`
-      );
+      console.log(`Tentative de réinitialisation pour un email inexistant: ${email}`);
       throw new NotFoundException('Adresse email introuvable.');
     }
 
     const resetToken = uuidv4();
-    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 heure
+    const resetTokenExpiry = new Date(Date.now() + 3600000);
 
     await this.prisma.user.update({
       where: { email },
       data: { resetToken, resetTokenExpiry },
     });
 
-    // ✅ Template HTML de l'email (identique à avant)
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; padding: 20px; background-color: #F2F4F7;">
         <h2 style="color: #4CAF50;">Réinitialisation de mot de passe</h2>
@@ -324,7 +428,6 @@ export class AuthService {
     `;
 
     try {
-      // ✅ CHANGEMENT : Envoi avec Mailjet au lieu de SendGrid
       const request = await this.mailjet
         .post('send', { version: 'v3.1' })
         .request({
@@ -349,18 +452,11 @@ export class AuthService {
       console.log('✅ Email envoyé avec succès via Mailjet:', request.body);
 
       return {
-        message:
-          'Un email a été envoyé. Veuillez vérifier votre boîte de réception.',
+        message: 'Un email a été envoyé. Veuillez vérifier votre boîte de réception.',
       };
     } catch (error) {
-      console.error(
-        "❌ Erreur d'envoi d'email avec Mailjet:",
-        error.statusCode,
-        error.message
-      );
-      throw new InternalServerErrorException(
-        "Un problème est survenu lors de l'envoi de l'email."
-      );
+      console.error('❌ Erreur d\'envoi d\'email avec Mailjet:', error.statusCode, error.message);
+      throw new InternalServerErrorException("Un problème est survenu lors de l'envoi de l'email.");
     }
   }
 }
