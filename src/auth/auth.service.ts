@@ -33,20 +33,41 @@ export class AuthService {
 
   // ✅ NOUVELLE FONCTION : Générer un username pour une mairie
   private generateMunicipalityUsername(cityName: string): string {
-    // On prend le nom de la ville, on enlève les espaces, on met en minuscules
     const normalizedCity = cityName
       .toLowerCase()
       .trim()
-      .replace(/\s+/g, '-') // Remplace les espaces par des tirets
+      .replace(/\s+/g, '-')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    
+    return `mairie-${normalizedCity}`;
+  }
+
+  // 🆕 NOUVELLE FONCTION : Vérifier si un texte contient "mairie"
+  private containsMairie(text: string): boolean {
+    if (!text) return false;
+    
+    // On normalise le texte pour détecter toutes les variantes
+    const normalized = text
+      .toLowerCase()
+      .trim()
       .normalize('NFD') // Enlève les accents
       .replace(/[\u0300-\u036f]/g, ''); // Enlève les caractères accentués
     
-    return `mairie-${normalizedCity}`;
+    // On cherche "mairie" dans le texte normalisé
+    return normalized.includes('mairie');
   }
 
   async checkUsernameAvailability(username: string): Promise<boolean> {
     if (!username || username.trim().length < 3) {
       throw new BadRequestException('Le nom d\'utilisateur doit contenir au moins 3 caractères');
+    }
+
+    // 🆕 NOUVELLE VÉRIFICATION : Bloquer "mairie" pour les citoyens
+    if (this.containsMairie(username)) {
+      throw new BadRequestException(
+        'Le mot "mairie" est réservé aux comptes officiels des mairies. Veuillez choisir un autre nom d\'utilisateur.'
+      );
     }
 
     const existingUser = await this.prisma.user.findFirst({
@@ -87,7 +108,7 @@ export class AuthService {
     password: string,
     lastName: string,
     firstName: string,
-    username: string, // ⬅️ Peut être vide si c'est une mairie
+    username: string,
     photoUrls: string[],
     nomCommune?: string,
     codePostal?: string,
@@ -108,7 +129,33 @@ export class AuthService {
       photoUrls: photoUrls?.length || 0
     });
 
-    // ✅ NOUVEAU : Si c'est une mairie, on génère automatiquement le username
+    // 🆕 NOUVELLE VÉRIFICATION : Pour les CITOYENS uniquement, bloquer "mairie"
+    if (!isMunicipality) {
+      // Vérifier le nom
+      if (this.containsMairie(lastName)) {
+        throw new BadRequestException(
+          'Le mot "mairie" ne peut pas être utilisé dans le nom. Ce terme est réservé aux comptes officiels des mairies.'
+        );
+      }
+
+      // Vérifier le prénom
+      if (this.containsMairie(firstName)) {
+        throw new BadRequestException(
+          'Le mot "mairie" ne peut pas être utilisé dans le prénom. Ce terme est réservé aux comptes officiels des mairies.'
+        );
+      }
+
+      // Vérifier le username
+      if (this.containsMairie(username)) {
+        throw new BadRequestException(
+          'Le mot "mairie" ne peut pas être utilisé dans le nom d\'utilisateur. Ce terme est réservé aux comptes officiels des mairies.'
+        );
+      }
+
+      console.log('✅ Vérification "mairie" passée pour le citoyen');
+    }
+
+    // ✅ Si c'est une mairie, on génère automatiquement le username
     let finalUsername = username;
     
     if (isMunicipality) {
@@ -116,7 +163,6 @@ export class AuthService {
         throw new BadRequestException('Le nom de la commune est requis pour les mairies');
       }
       
-      // On génère le username automatiquement : "mairie-nomville"
       finalUsername = this.generateMunicipalityUsername(nomCommune);
       console.log(`🏛️ Username généré automatiquement pour la mairie : ${finalUsername}`);
     }
@@ -129,7 +175,7 @@ export class AuthService {
       throw new ConflictException('Cet email est déjà utilisé.');
     }
 
-    // Vérification username (avec le username final, généré ou fourni)
+    // Vérification username
     const existingUsername = await this.prisma.user.findFirst({
       where: { 
         username: {
@@ -156,14 +202,13 @@ export class AuthService {
       throw new BadRequestException('Latitude et longitude sont obligatoires.');
     }
 
-    // ✅ On utilise finalUsername (qui est soit le username fourni, soit celui généré)
     const user = await this.prisma.user.create({
       data: {
         email,
         password: hashedPassword,
         lastName,
         firstName,
-        username: finalUsername, // ⬅️ Username final (généré ou fourni)
+        username: finalUsername,
         nomCommune,
         codePostal,
         latitude,
@@ -211,7 +256,7 @@ export class AuthService {
       return {
         id: user.id,
         email: user.email,
-        username: user.username, // ⬅️ On retourne le username généré
+        username: user.username,
         message: 'Demande d\'inscription envoyée. En attente de validation.',
       };
     }
@@ -230,13 +275,9 @@ export class AuthService {
     };
   }
 
-  /**
-   * 🆕 NOUVELLE MÉTHODE : Valider ou rejeter une demande de mairie
-   */
   async validateMunicipality(userId: number, action: 'approve' | 'reject', reason?: string) {
     console.log(`🔍 Validation de la mairie - UserID: ${userId}, Action: ${action}`);
 
-    // 1️⃣ On récupère l'utilisateur depuis la base de données
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -249,7 +290,6 @@ export class AuthService {
       throw new BadRequestException('Cet utilisateur n\'est pas une mairie');
     }
 
-    // 2️⃣ On met à jour le statut de l'utilisateur selon l'action
     if (action === 'approve') {
       console.log('✅ Approbation de la mairie...');
       
@@ -261,7 +301,6 @@ export class AuthService {
         },
       });
 
-      // 3️⃣ On envoie l'email d'approbation à la mairie
       await this.mailService.sendMunicipalityApprovalEmail(user);
 
       return {
@@ -285,7 +324,6 @@ export class AuthService {
         },
       });
 
-      // 3️⃣ On envoie l'email de rejet à la mairie
       await this.mailService.sendMunicipalityRejectionEmail(user, reason);
 
       return {
