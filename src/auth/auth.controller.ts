@@ -62,7 +62,7 @@ export class AuthController {
     @Body('password') password: string,
     @Body('lastName') lastName: string,
     @Body('firstName') firstName: string,
-    @Body('username') username: string,
+    @Body('username') username: string, // ⬅️ Devient optionnel pour les mairies
     @Body('nom_commune') nomCommune: string,
     @Body('code_postal') codePostal: string,
     @Body('latitude') latitude: string,
@@ -76,6 +76,7 @@ export class AuthController {
   ) {
     console.log('📥 Données reçues du frontend :', {
       email,
+      username, // ⬅️ Peut être undefined pour les mairies
       nomCommune,
       codePostal,
       latitude,
@@ -92,6 +93,10 @@ export class AuthController {
     }
 
     const isMunicipalityBool = isMunicipality === 'true';
+
+    // ✅ NOUVEAU : Si c'est une mairie et pas de username, on passe une chaîne vide
+    // Le service va le générer automatiquement
+    const finalUsername = isMunicipalityBool && !username ? '' : username;
 
     let photoUrls: string[] = [];
     
@@ -119,6 +124,7 @@ export class AuthController {
       console.log('📸 URLs des photos après upload :', photoUrls);
     } else {
       console.log('🏛️ Inscription de mairie - Pas de photo requise');
+      console.log(`🏛️ Username sera généré automatiquement pour la ville: ${nomCommune}`);
     }
 
     return this.authService.signup(
@@ -126,7 +132,7 @@ export class AuthController {
       password,
       firstName,
       lastName,
-      username,
+      finalUsername, // ⬅️ Peut être vide si mairie, sera généré automatiquement
       photoUrls,
       nomCommune, 
       codePostal, 

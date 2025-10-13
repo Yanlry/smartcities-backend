@@ -31,6 +31,19 @@ export class AuthService {
     );
   }
 
+  // ✅ NOUVELLE FONCTION : Générer un username pour une mairie
+  private generateMunicipalityUsername(cityName: string): string {
+    // On prend le nom de la ville, on enlève les espaces, on met en minuscules
+    const normalizedCity = cityName
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-') // Remplace les espaces par des tirets
+      .normalize('NFD') // Enlève les accents
+      .replace(/[\u0300-\u036f]/g, ''); // Enlève les caractères accentués
+    
+    return `mairie-${normalizedCity}`;
+  }
+
   async checkUsernameAvailability(username: string): Promise<boolean> {
     if (!username || username.trim().length < 3) {
       throw new BadRequestException('Le nom d\'utilisateur doit contenir au moins 3 caractères');
@@ -74,7 +87,7 @@ export class AuthService {
     password: string,
     lastName: string,
     firstName: string,
-    username: string,
+    username: string, // ⬅️ Peut être vide si c'est une mairie
     photoUrls: string[],
     nomCommune?: string,
     codePostal?: string,
@@ -91,9 +104,24 @@ export class AuthService {
       username,
       isMunicipality,
       municipalityName,
+      nomCommune,
       photoUrls: photoUrls?.length || 0
     });
 
+    // ✅ NOUVEAU : Si c'est une mairie, on génère automatiquement le username
+    let finalUsername = username;
+    
+    if (isMunicipality) {
+      if (!nomCommune) {
+        throw new BadRequestException('Le nom de la commune est requis pour les mairies');
+      }
+      
+      // On génère le username automatiquement : "mairie-nomville"
+      finalUsername = this.generateMunicipalityUsername(nomCommune);
+      console.log(`🏛️ Username généré automatiquement pour la mairie : ${finalUsername}`);
+    }
+
+    // Vérification email
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
@@ -101,10 +129,11 @@ export class AuthService {
       throw new ConflictException('Cet email est déjà utilisé.');
     }
 
+    // Vérification username (avec le username final, généré ou fourni)
     const existingUsername = await this.prisma.user.findFirst({
       where: { 
         username: {
-          equals: username.trim(),
+          equals: finalUsername.trim(),
           mode: 'insensitive'
         }
       },
@@ -113,6 +142,7 @@ export class AuthService {
       throw new ConflictException('Ce nom d\'utilisateur est déjà pris.');
     }
 
+    // Pour les utilisateurs normaux, vérifier qu'il y a des photos
     if (!isMunicipality) {
       if (!photoUrls || photoUrls.length === 0) {
         throw new BadRequestException('No valid photo URLs provided');
@@ -126,13 +156,14 @@ export class AuthService {
       throw new BadRequestException('Latitude et longitude sont obligatoires.');
     }
 
+    // ✅ On utilise finalUsername (qui est soit le username fourni, soit celui généré)
     const user = await this.prisma.user.create({
       data: {
         email,
         password: hashedPassword,
         lastName,
         firstName,
-        username,
+        username: finalUsername, // ⬅️ Username final (généré ou fourni)
         nomCommune,
         codePostal,
         latitude,
@@ -149,6 +180,7 @@ export class AuthService {
 
     console.log('✅ Utilisateur créé en base de données :', user);
 
+    // Ajouter les photos pour les utilisateurs normaux
     if (!isMunicipality && photoUrls.length > 0) {
       const photosData = photoUrls.map((url, index) => ({
         url,
@@ -163,6 +195,7 @@ export class AuthService {
       });
     }
 
+    // Si c'est une mairie, envoyer l'email d'inscription
     if (isMunicipality) {
       console.log('🏛️ Envoi de l\'email d\'inscription mairie via MailService...');
       
@@ -178,11 +211,12 @@ export class AuthService {
       return {
         id: user.id,
         email: user.email,
-        username: user.username,
+        username: user.username, // ⬅️ On retourne le username généré
         message: 'Demande d\'inscription envoyée. En attente de validation.',
       };
     }
 
+    // Pour les utilisateurs normaux, générer un token
     const payload = { userId: user.id, email: user.email };
     const token = this.jwtService.sign(payload);
 

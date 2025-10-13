@@ -19,7 +19,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { CityInfoService } from './cityinfo.service';
 import { UpsertCityInfoDto } from './dto/upsert-city-info.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { multerConfig } from './multer.config';
 
 @Controller('cityinfo')
 export class CityInfoController {
@@ -27,8 +26,6 @@ export class CityInfoController {
 
   /**
    * ROUTE 1 : Vérifier si une ville a configuré ses infos
-   * Exemple : GET /cityinfo/exists?cityName=HAUBOURDIN
-   * 🌍 PUBLIC (pas besoin de connexion)
    */
   @Get('exists')
   @HttpCode(HttpStatus.OK)
@@ -40,8 +37,6 @@ export class CityInfoController {
 
   /**
    * ROUTE 2 : Récupérer les infos complètes d'une ville
-   * Exemple : GET /cityinfo?cityName=HAUBOURDIN
-   * 🌍 PUBLIC (tout le monde peut voir)
    */
   @Get()
   @HttpCode(HttpStatus.OK)
@@ -51,88 +46,78 @@ export class CityInfoController {
   }
 
   /**
-   * ✨ NOUVELLE ROUTE : Uploader la photo du maire
-   * Exemple : POST /cityinfo/upload-mayor-photo
-   * 🔒 PROTÉGÉ (seulement pour les mairies)
+   * ✨ ROUTE CORRIGÉE : Uploader la photo du maire vers S3
    */
   @Post('upload-mayor-photo')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('mayorPhoto', multerConfig))
+  @UseInterceptors(FileInterceptor('mayorPhoto')) // ⬅️ On enlève multerConfig car on va uploader sur S3
   @HttpCode(HttpStatus.OK)
   async uploadMayorPhoto(
     @UploadedFile() file: Express.Multer.File,
     @Body('cityName') cityName: string,
     @Request() req: any,
   ) {
-    console.log('📸 Upload photo du maire');
-    console.log('📁 Fichier reçu:', file?.filename);
+    console.log('📸 Upload photo du maire vers S3');
+    console.log('📁 Fichier reçu:', file?.originalname);
     console.log('🏙️ Ville:', cityName);
-    
+
     if (!file) {
-      return { 
-        success: false, 
-        message: 'Aucun fichier fourni' 
+      return {
+        success: false,
+        message: 'Aucun fichier fourni',
       };
     }
 
-    // Construire l'URL complète de la photo
-    const photoUrl = `${process.env.API_URL}/uploads/mayor-photos/${file.filename}`;
-    
-    // Sauvegarder l'URL dans la base de données
-    const result = await this.cityInfoService.updateMayorPhoto(
+    // ⬅️ ✅ On passe le fichier au service qui va l'uploader sur S3
+    const result = await this.cityInfoService.uploadMayorPhoto(
       req.user.id,
       cityName,
-      photoUrl,
+      file,
     );
 
     return {
       success: true,
-      message: 'Photo uploadée avec succès',
-      mayorPhotoUrl: photoUrl,
+      message: 'Photo uploadée avec succès sur S3',
+      mayorPhotoUrl: result.photoUrl,
     };
   }
 
   /**
- * ✨ NOUVELLE ROUTE : Uploader la photo d'un membre d'équipe
- * Exemple : POST /cityinfo/upload-team-photo
- * 🔒 PROTÉGÉ (seulement pour les mairies)
- */
-@Post('upload-team-photo')
-@UseGuards(JwtAuthGuard)
-@UseInterceptors(FileInterceptor('teamMemberPhoto', multerConfig))
-@HttpCode(HttpStatus.OK)
-async uploadTeamMemberPhoto(
-  @UploadedFile() file: Express.Multer.File,
-  @Body('cityName') cityName: string,
-  @Request() req: any,
-) {
-  console.log('📸 Upload photo membre équipe');
-  console.log('📁 Fichier reçu:', file?.filename);
-  console.log('🏙️ Ville:', cityName);
-  
-  if (!file) {
-    return { 
-      success: false, 
-      message: 'Aucun fichier fourni' 
+   * ✨ ROUTE CORRIGÉE : Uploader la photo d'un membre d'équipe vers S3
+   */
+  @Post('upload-team-photo')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('teamMemberPhoto')) // ⬅️ On enlève multerConfig
+  @HttpCode(HttpStatus.OK)
+  async uploadTeamMemberPhoto(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any,
+  ) {
+    console.log('📸 Upload photo membre équipe vers S3');
+    console.log('📁 Fichier reçu:', file?.originalname);
+
+    if (!file) {
+      return {
+        success: false,
+        message: 'Aucun fichier fourni',
+      };
+    }
+
+    // ⬅️ ✅ Upload vers S3
+    const result = await this.cityInfoService.uploadTeamMemberPhoto(
+      req.user.id,
+      file,
+    );
+
+    return {
+      success: true,
+      message: 'Photo uploadée avec succès sur S3',
+      photoUrl: result.photoUrl,
     };
   }
-
-  // Construire l'URL complète de la photo
-  const photoUrl = `${process.env.API_URL}/uploads/mayor-photos/${file.filename}`;
-  
-  console.log('✅ Photo uploadée avec succès:', photoUrl);
-
-  return {
-    success: true,
-    message: 'Photo uploadée avec succès',
-    photoUrl: photoUrl,
-  };
-}
 
   /**
    * ROUTE 3 : Créer ou modifier les infos d'une ville
-   * Exemple : POST /cityinfo
-   * 🔒 PROTÉGÉ (seulement pour les mairies connectées)
    */
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -143,17 +128,12 @@ async uploadTeamMemberPhoto(
   ) {
     console.log('📥 Sauvegarde par userId:', req.user.id);
     console.log('📝 Données:', upsertCityInfoDto);
-    
-    return this.cityInfoService.upsertCityInfo(
-      req.user.id,
-      upsertCityInfoDto,
-    );
+
+    return this.cityInfoService.upsertCityInfo(req.user.id, upsertCityInfoDto);
   }
 
   /**
    * ROUTE 4 : Supprimer les infos d'une ville
-   * Exemple : DELETE /cityinfo/HAUBOURDIN
-   * 🔒 PROTÉGÉ (seulement pour les mairies)
    */
   @Delete(':cityName')
   @UseGuards(JwtAuthGuard)

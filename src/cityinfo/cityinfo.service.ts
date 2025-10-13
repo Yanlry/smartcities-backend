@@ -7,11 +7,15 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { S3Service } from 'src/services/s3/s3.service'; // ⬅️ ✅ AJOUT
 import { UpsertCityInfoDto } from './dto/upsert-city-info.dto';
 
 @Injectable()
 export class CityInfoService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly s3Service: S3Service, // ⬅️ ✅ AJOUT
+  ) {}
 
   /**
    * MÉTHODE 1 : Récupérer les infos d'une ville
@@ -45,14 +49,17 @@ export class CityInfoService {
   }
 
   /**
-   * ✨ NOUVELLE MÉTHODE : Mettre à jour la photo du maire
+   * ✨ MÉTHODE CORRIGÉE : Uploader la photo du maire vers S3
    */
-  async updateMayorPhoto(userId: number, cityName: string, photoUrl: string) {
+  async uploadMayorPhoto(
+    userId: number,
+    cityName: string,
+    file: Express.Multer.File, // ⬅️ On reçoit maintenant le fichier, pas l'URL
+  ) {
     try {
-      console.log('📸 Mise à jour photo du maire');
+      console.log('📸 Upload photo du maire vers S3');
       console.log('👤 UserId:', userId);
       console.log('🏙️ Ville:', cityName);
-      console.log('🖼️ URL photo:', photoUrl);
 
       // Vérifier que l'utilisateur est une mairie
       const user = await this.prisma.user.findUnique({
@@ -61,8 +68,14 @@ export class CityInfoService {
       });
 
       if (!user || !user.isMunicipality) {
-        throw new ForbiddenException('Accès refusé. Seules les mairies peuvent modifier cette information.');
+        throw new ForbiddenException(
+          'Accès refusé. Seules les mairies peuvent modifier cette information.'
+        );
       }
+
+      // ⬅️ ✅ CHANGEMENT PRINCIPAL : Upload vers S3 au lieu du serveur local
+      const photoUrl = await this.s3Service.uploadFile(file);
+      console.log('✅ Photo uploadée sur S3:', photoUrl);
 
       // Mettre à jour la photo dans la base de données
       const cityInfo = await this.prisma.cityInfo.upsert({
@@ -78,10 +91,43 @@ export class CityInfoService {
         },
       });
 
-      console.log('✅ Photo du maire mise à jour');
-      return cityInfo;
+      console.log('✅ Photo du maire mise à jour en BDD');
+      return { photoUrl };
     } catch (error) {
-      console.error('❌ Erreur updateMayorPhoto:', error.message);
+      console.error('❌ Erreur uploadMayorPhoto:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * ✨ NOUVELLE MÉTHODE : Uploader la photo d'un membre d'équipe vers S3
+   */
+  async uploadTeamMemberPhoto(
+    userId: number,
+    file: Express.Multer.File,
+  ) {
+    try {
+      console.log('📸 Upload photo membre équipe vers S3');
+
+      // Vérifier que l'utilisateur est une mairie
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { isMunicipality: true },
+      });
+
+      if (!user || !user.isMunicipality) {
+        throw new ForbiddenException(
+          'Accès refusé. Seules les mairies peuvent uploader des photos.'
+        );
+      }
+
+      // ⬅️ ✅ Upload vers S3
+      const photoUrl = await this.s3Service.uploadFile(file);
+      console.log('✅ Photo membre uploadée sur S3:', photoUrl);
+
+      return { photoUrl };
+    } catch (error) {
+      console.error('❌ Erreur uploadTeamMemberPhoto:', error.message);
       throw error;
     }
   }
