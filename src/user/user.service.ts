@@ -31,6 +31,11 @@ export class UserService {
     const users = await this.prisma.user.findMany({
       where: {
         nomCommune: cityName,
+        NOT: [
+          { username: { contains: 'mairie', mode: 'insensitive' } },
+          { lastName: { contains: 'mairie', mode: 'insensitive' } },
+          { firstName: { contains: 'mairie', mode: 'insensitive' } },
+        ],
       },
       include: {
         votes: true,
@@ -40,6 +45,7 @@ export class UserService {
         },
       },
     });
+    
 
     const usersWithRanking = users
       .map((user) => ({
@@ -63,6 +69,13 @@ export class UserService {
 
   async listAllUsersByRanking() {
     const users = await this.prisma.user.findMany({
+      where: {
+        NOT: [
+          { username: { contains: 'mairie', mode: 'insensitive' } },
+          { lastName: { contains: 'mairie', mode: 'insensitive' } },
+          { firstName: { contains: 'mairie', mode: 'insensitive' } },
+        ],
+      },
       include: {
         votes: true,
         photos: {
@@ -133,6 +146,11 @@ export class UserService {
     const users = await this.prisma.user.findMany({
       where: {
         nomCommune: cityName,
+        NOT: [
+          { username: { contains: 'mairie', mode: 'insensitive' } },
+          { lastName: { contains: 'mairie', mode: 'insensitive' } },
+          { firstName: { contains: 'mairie', mode: 'insensitive' } },
+        ],
       },
       include: {
         votes: true,
@@ -142,7 +160,7 @@ export class UserService {
         },
       },
     });
-
+  
     const usersWithVoteCount = users.map((user) => ({
       id: user.id,
       username: user.username,
@@ -152,12 +170,12 @@ export class UserService {
       voteCount: user.votes.length,
       photo: user.photos[0]?.url || null,
     }));
-
+  
     usersWithVoteCount.sort((a, b) => b.voteCount - a.voteCount);
-
+  
     const ranking =
       usersWithVoteCount.findIndex((user) => user.id === userId) + 1;
-
+  
     return {
       ranking,
       totalUsers: usersWithVoteCount.length,
@@ -167,6 +185,7 @@ export class UserService {
       })),
     };
   }
+  
 
   // ========================================
   // 🔧 FONCTION CORRIGÉE : getUserById
